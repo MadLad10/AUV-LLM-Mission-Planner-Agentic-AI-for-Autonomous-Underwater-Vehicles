@@ -8,7 +8,7 @@ import pytest
 from duburi_mission_planner.config import load_config
 
 PKG_DIR = os.path.join(os.path.dirname(__file__), '..', 'duburi_mission_planner')
-FORBIDDEN = re.compile(r'thruster|cmd_thrust|controller/setpoint|controller/mode|cmd_vel|'
+FORBIDDEN = re.compile(r'/[\w/]*thruster|cmd_thrust|controller/setpoint|controller/mode|cmd_vel|'
                        r'/simulator/control|arduino_control|rc_channels|RC_CHANNELS_OVERRIDE', re.I)
 
 

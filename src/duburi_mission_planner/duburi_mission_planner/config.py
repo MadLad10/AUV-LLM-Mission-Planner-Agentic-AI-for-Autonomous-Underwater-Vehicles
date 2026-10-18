@@ -11,7 +11,7 @@ PKG = 'duburi_mission_planner'
 
 
 def _candidates(name: str) -> list[str]:
-    here = os.path.dirname(os.path.abspath(__file__))
+    here = os.path.dirname(os.path.realpath(__file__))
     out = [os.path.join(here, '..', 'config', name)]           # source tree / symlink install
     try:
         from ament_index_python.packages import get_package_share_directory
@@ -29,7 +29,7 @@ def config_path(name: str, override: str | None = None) -> str:
         return env
     for c in _candidates(name):
         if os.path.isfile(c):
-            return os.path.abspath(c)
+            return os.path.realpath(c)
     raise FileNotFoundError(f'config {name} not found in {_candidates(name)}')
 
 
