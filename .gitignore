@@ -1,0 +1,17 @@
+# secrets
+.env
+# colcon
+build/
+install/
+log/
+# runtime outputs
+traces/*
+!traces/.gitkeep
+results/
+runs/
+*.bag
+rosbag*/
+eval/results/raw/
+__pycache__/
+*.pyc
+.pytest_cache/

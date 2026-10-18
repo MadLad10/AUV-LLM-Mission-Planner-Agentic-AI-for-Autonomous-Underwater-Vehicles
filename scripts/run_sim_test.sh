@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+# Launch the headless sim, run ONE mission (or a custom command), save everything, shut down cleanly.
+#
+#   scripts/run_sim_test.sh [options] "pass through the gate then surface"
+#   scripts/run_sim_test.sh [options] --cmd "python3 some_probe.py"
+#
+# Options:
+#   -a ARENA       arena name or yaml (default: default)
+#   -t SECONDS     mission timeout, wall clock (default: 300)
+#   -p PROVIDER    LLM provider for the mission CLI (default: from config)
+#   -b PERCENT     simulated battery start (default: 100)
+#   -r RTF         real-time factor (default: 1.0)
+#   -d SOURCE      detection source: ground_truth | camera (default: ground_truth)
+#   -c             render the camera and save frames (implied by -d camera)
+#   -n             no rosbag
+#   -o DIR         output dir (default: runs/<timestamp>_<slug>)
+#   -s STACK       sim stack: full | minimal (default: full)
+#
+# Output dir: launch.log, mission.log, result.json, referee.json, trace.json (if produced), bag/, frames/
+# Exit code: the mission command's exit code (124 = timeout), or 90+ for harness failures.
+set -u
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ARENA=default; TIMEOUT=300; PROVIDER=""; BATTERY=100; RTF=1.0; DET=ground_truth
+CAMERA=false; BAG=true; OUT=""; STACK=full; CMD=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -a) ARENA="$2"; shift 2;;
+    -t) TIMEOUT="$2"; shift 2;;
+    -p) PROVIDER="$2"; shift 2;;
+    -b) BATTERY="$2"; shift 2;;
+    -r) RTF="$2"; shift 2;;
+    -d) DET="$2"; shift 2;;
+    -c) CAMERA=true; shift;;
+    -n) BAG=false; shift;;
+    -o) OUT="$2"; shift 2;;
+    -s) STACK="$2"; shift 2;;
+    --cmd) CMD="$2"; shift 2;;
+    -h|--help) sed -n 2,21p "$0"; exit 0;;
+    *) break;;
+  esac
+done
+PROMPT="${*:-}"
+[ "$DET" = camera ] && CAMERA=true
+if [ -z "$PROMPT" ] && [ -z "$CMD" ]; then echo "need a mission prompt or --cmd" >&2; exit 2; fi
+
+slug=$(echo "${PROMPT:-$CMD}" | tr -cs 'a-zA-Z0-9' '_' | cut -c1-40)
+OUT="${OUT:-$WS/runs/$(date +%Y%m%d_%H%M%S)_${slug}}"
+mkdir -p "$OUT"
+OUT="$(cd "$OUT" && pwd)"
+
+set +u; source "$WS/scripts/env.sh"; set -u
+"$WS/scripts/cleanup_sim.sh" > /dev/null || { echo "[run] cleanup failed" >&2; exit 91; }
+
+log() { echo "[run $(date +%H:%M:%S)] $*" | tee -a "$OUT/harness.log"; }
+SIM_PID=""; BAG_PID=""; FRAMES_PID=""
+finish() {
+  local code=$1
+  [ -n "$FRAMES_PID" ] && kill -INT "$FRAMES_PID" 2>/dev/null
+  if [ -n "$BAG_PID" ]; then kill -INT "$BAG_PID" 2>/dev/null; wait "$BAG_PID" 2>/dev/null; fi
+  if [ -n "$SIM_PID" ]; then
+    kill -INT "$SIM_PID" 2>/dev/null
+    for _ in $(seq 1 10); do kill -0 "$SIM_PID" 2>/dev/null || break; sleep 1; done
+  fi
+  "$WS/scripts/cleanup_sim.sh" >> "$OUT/harness.log" 2>&1
+  python3 - "$OUT" "$code" "$START" "$ARENA" "$PROMPT" "$CMD" <<'PY'
+import json, sys, time, os
+out, code, start, arena, prompt, cmd = sys.argv[1:7]
+res = {'exit_code': int(code), 'timed_out': int(code) == 124, 'wall_s': round(time.time() - float(start), 1),
+       'arena': arena, 'prompt': prompt, 'cmd': cmd,
+       'files': sorted(os.listdir(out))}
+json.dump(res, open(os.path.join(out, 'result.json'), 'w'), indent=2)
+PY
+  log "done: exit=$code  results in $OUT"
+  exit "$code"
+}
+START=$(date +%s.%N)
+trap 'finish 130' INT TERM
+
+log "launching sim arena=$ARENA camera=$CAMERA rtf=$RTF det=$DET battery=$BATTERY stack=$STACK"
+setsid timeout $((TIMEOUT + 90)) ros2 launch duburi_sim sim.launch.py arena:="$ARENA" camera:="$CAMERA" \
+  rtf:="$RTF" detection_source:="$DET" battery_start:="$BATTERY" stack:="$STACK" > "$OUT/launch.log" 2>&1 &
+SIM_PID=$!
+
+# wait for odometry (sim + bridge up)
+ready=false
+for _ in $(seq 1 30); do
+  if timeout 3 ros2 topic echo --once /duburi/odom --field header.stamp > /dev/null 2>&1; then ready=true; break; fi
+  kill -0 "$SIM_PID" 2>/dev/null || break
+  sleep 1
+done
+$ready || { log "sim did not come up (see launch.log)"; finish 92; }
+if [ "$STACK" = full ]; then
+  for _ in $(seq 1 20); do
+    ros2 action list 2>/dev/null | grep -q /duburi/navigate_to && break; sleep 1
+  done
+fi
+log "sim ready"
+
+if $BAG; then
+  timeout $((TIMEOUT + 60)) ros2 bag record -o "$OUT/bag" /duburi/odom /duburi/battery /duburi/detections \
+    /duburi/controller/setpoint /duburi/controller/mode /duburi/thrusters/total_abs /duburi_sim/events \
+    /duburi/mission_status > "$OUT/bag.log" 2>&1 &
+  BAG_PID=$!
+fi
+if $CAMERA; then
+  timeout $((TIMEOUT + 30)) ros2 run duburi_sim save_camera_frame --ros-args -p out_dir:="$OUT/frames" \
+    -p count:=60 -p every_n:=10 -p timeout_s:="$TIMEOUT" > "$OUT/frames.log" 2>&1 &
+  FRAMES_PID=$!
+fi
+
+if [ -n "$CMD" ]; then
+  log "running: $CMD"
+  timeout "$TIMEOUT" bash -c "$CMD" > "$OUT/mission.log" 2>&1
+  code=$?
+else
+  log "mission: $PROMPT"
+  extra=(); [ -n "$PROVIDER" ] && extra=(--provider "$PROVIDER")
+  timeout "$TIMEOUT" ros2 run duburi_mission_planner mission "${extra[@]}" --trace-dir "$OUT" \
+    --timeout "$TIMEOUT" "$PROMPT" > "$OUT/mission.log" 2>&1
+  code=$?
+fi
+log "mission command exit=$code"
+
+if [ "$STACK" = full ]; then
+  timeout 10 ros2 service call /duburi_sim/referee_report std_srvs/srv/Trigger '{}' 2>/dev/null \
+    | python3 -c "import sys,re,json; t=sys.stdin.read(); m=re.search(r\"message='(.*)'\)\", t, re.S); print(m.group(1) if m else '{}')" \
+    > "$OUT/referee.json"
+fi
+finish "$code"
