@@ -22,6 +22,8 @@ log = logging.getLogger('duburi.validator')
 
 MOTION_TOOLS = {'navigate_to', 'search_pattern', 'hold_depth'}
 DEFAULT_TIMEOUT_S = 60.0
+# shortest timeout the validator will scale a step down to (sim seconds)
+MIN_STEP_TIMEOUT_S = {'navigate_to': 60.0, 'search_pattern': 60.0, 'surface': 40.0}
 
 
 @dataclass
@@ -110,8 +112,7 @@ class SafetyValidator:
 
         total = sum(s.timeout_s for s in plan.steps)
         if total > L['max_mission_time_s']:
-            self._reject(rep, 'mission_time',
-                         f'sum of step timeouts {total:.0f}s > max mission time {L["max_mission_time_s"]:.0f}s')
+            self._fit_time_budget(rep, plan, total)
 
         rep.ok = not rep.rejected
         log.info('validation %s: %d rejected, %d repaired', 'OK' if rep.ok else 'FAILED',
@@ -124,6 +125,10 @@ class SafetyValidator:
             self._reject(rep, 'tool_not_allowed', f'tool {s.tool!r} is not allowed '
                                                   f'(allowed: {", ".join(L["allowed_tools"])})', s.id)
             return
+        if s.tool == 'navigate_to' and s.params.get('pass_through') and s.params.get('target') not in (None, 'gate'):
+            if self._repair(rep, 'pass_through', f'pass_through ignored for target {s.params["target"]!r} '
+                                                 f'(only the gate is passed through)', s.id):
+                s.params.pop('pass_through')
         try:
             p = TOOL_PARAMS[s.tool].model_validate(s.params)
         except ValidationError as e:
@@ -178,6 +183,25 @@ class SafetyValidator:
         if speed is not None and speed > L['max_speed_mps']:
             if self._repair(rep, 'speed_limit', f'speed {speed} clamped to {L["max_speed_mps"]}', s.id):
                 s.params['speed'] = float(L['max_speed_mps'])
+
+    def _min_timeout(self, s: Step) -> float:
+        if s.tool == 'hold_depth':
+            return float(s.params.get('duration_s', 5.0)) + 20.0
+        return MIN_STEP_TIMEOUT_S.get(s.tool, 30.0)
+
+    def _fit_time_budget(self, rep, plan: MissionPlan, total: float):
+        """Over budget: scale timeouts down proportionally if every step keeps a safe minimum."""
+        budget = self.L['max_mission_time_s']
+        k = budget / total
+        if all(s.timeout_s * k >= self._min_timeout(s) for s in plan.steps):
+            if self._repair(rep, 'mission_time', f'step timeouts sum to {total:.0f}s > {budget:.0f}s; '
+                                                 f'scaled by {k:.2f} to fit the mission time budget'):
+                for s in plan.steps:
+                    s.timeout_s = float(int(s.timeout_s * k))
+                return
+        self._reject(rep, 'mission_time',
+                     f'sum of step timeouts {total:.0f}s > max mission time {budget:.0f}s '
+                     f'(too many steps to fit even with shorter timeouts)')
 
     def _check_abort_conditions(self, rep, plan: MissionPlan):
         L = self.L

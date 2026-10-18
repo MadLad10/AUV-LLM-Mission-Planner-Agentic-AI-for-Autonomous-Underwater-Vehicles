@@ -107,9 +107,19 @@ class ToolRegistry:
     def _navigate_to(self, p, timeout_s):
         deadline = self.backend.now() + timeout_s
         remaining = lambda: max(1.0, deadline - self.backend.now())
-        if p.target is None:
+        if p.mode == 'point':
             o = self._go(p.x, p.y, p.depth, speed=p.speed, timeout_s=timeout_s)
             return self._from_outcome(o, {'target': {'x': p.x, 'y': p.y, 'depth': p.depth}})
+        if p.mode == 'relative':
+            pose = self.backend.pose()
+            if pose is None:
+                return False, {}, 'no pose data for a relative move', 'backend_unavailable'
+            f, l = p.forward_m or 0.0, p.left_m or 0.0
+            x = pose.x + math.cos(pose.yaw) * f - math.sin(pose.yaw) * l
+            y = pose.y + math.sin(pose.yaw) * f + math.cos(pose.yaw) * l
+            depth = p.depth if p.depth is not None else pose.depth
+            o = self._go(x, y, depth, speed=p.speed, timeout_s=timeout_s)   # limits checked on the resolved point
+            return self._from_outcome(o, {'target': {'x': round(x, 2), 'y': round(y, 2), 'depth': round(depth, 2)}})
 
         if p.target not in self.limits.get('known_objects', []):
             return False, {'known_objects': self.limits.get('known_objects', [])}, \

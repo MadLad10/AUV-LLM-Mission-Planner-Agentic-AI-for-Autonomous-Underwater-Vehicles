@@ -141,3 +141,15 @@ def test_world_model_prefers_close_sightings_and_forgets():
     near = w.lookup('gate', now=2.0, near_range=3.0)
     assert near.x == pytest.approx(8.0)
     assert w.lookup('gate', now=100.0) is None
+
+
+def test_relative_move_resolved_from_pose_and_limited(cfg):
+    import math
+    b, t = make(cfg, start=(2.0, 1.0, 0.5, math.pi / 2))      # facing +y
+    o = t.call('navigate_to', {'forward_m': 3, 'left_m': 1, 'depth': 1.0})
+    assert o.ok, o.brief()
+    assert o.data['target'] == {'x': 1.0, 'y': 4.0, 'depth': 1.0}     # forward = +y, left = -x
+    p = t.call('get_pose').data
+    assert (p['x'], p['y'], p['depth']) == (1.0, 4.0, 1.0)
+    o = t.call('navigate_to', {'forward_m': 50})                     # leaves the geofence -> blocked at runtime
+    assert not o.ok and o.error_code == 'unsafe_target'

@@ -19,20 +19,33 @@ class GetDetectionsParams(_Params):
 
 
 class NavigateToParams(_Params):
-    target: Optional[str] = Field(None, description='object to go to (e.g. gate, red_buoy); use this OR x/y')
+    target: Optional[str] = Field(None, description='object to go to (e.g. gate, red_buoy); use this OR x/y '
+                                                    'OR forward_m/left_m')
     x: Optional[float] = Field(None, description='world x in metres (forward along the pool)')
     y: Optional[float] = Field(None, description='world y in metres (left positive)')
-    depth: Optional[float] = Field(None, description='metres below the surface; default = object depth')
+    forward_m: Optional[float] = Field(None, description='relative move: metres ahead of the vehicle (negative = back)')
+    left_m: Optional[float] = Field(None, description='relative move: metres to the vehicle\'s left (negative = right)')
+    depth: Optional[float] = Field(None, description='metres below the surface; default = object depth / current depth')
     pass_through: bool = Field(False, description='for target=gate: drive through the opening')
     standoff_m: float = Field(0.0, description='stop this far before the target (0 = touch it)')
     speed: Optional[float] = Field(None, description='m/s, optional')
 
+    @property
+    def mode(self) -> str:
+        if self.target is not None:
+            return 'target'
+        if self.forward_m is not None or self.left_m is not None:
+            return 'relative'
+        return 'point'
+
     @model_validator(mode='after')
     def _target_or_point(self):
-        if self.target is None and (self.x is None or self.y is None or self.depth is None):
-            raise ValueError('navigate_to needs either target or all of x, y, depth')
-        if self.target is not None and (self.x is not None or self.y is not None):
-            raise ValueError('navigate_to takes target OR x/y, not both')
+        modes = [self.target is not None, self.x is not None or self.y is not None,
+                 self.forward_m is not None or self.left_m is not None]
+        if sum(modes) != 1:
+            raise ValueError('navigate_to takes exactly one of: target, x/y/depth, forward_m/left_m')
+        if modes[1] and (self.x is None or self.y is None or self.depth is None):
+            raise ValueError('navigate_to with a point needs all of x, y, depth')
         if self.pass_through and self.target != 'gate':
             raise ValueError('pass_through only applies to target=gate')
         return self
@@ -80,7 +93,8 @@ TOOL_PARAMS: dict[str, type[_Params]] = {
 TOOL_DESCRIPTIONS: dict[str, str] = {
     'get_detections': 'List objects currently seen by the camera plus remembered object positions.',
     'navigate_to': 'Move to an object (target=..., e.g. touch a buoy with standoff_m=0, or '
-                   'target=gate with pass_through=true) or to a world point (x, y, depth). '
+                   'target=gate with pass_through=true), to a world point (x, y, depth), or relative to the '
+                   'vehicle (forward_m, left_m, optional depth). '
                    'Fails with target_not_detected if the object has not been seen yet.',
     'search_pattern': 'Run a search pattern (yaw_sweep | spiral | lawnmower) until target is detected.',
     'hold_depth': 'Hold a depth in place for duration_s seconds.',

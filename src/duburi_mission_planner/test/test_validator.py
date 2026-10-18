@@ -85,11 +85,35 @@ def test_invalid_params(v):
     assert rules(rep) == {'invalid_params'}
 
 
-def test_mission_time_budget(v, L):
-    n = int(L['max_mission_time_s'] // L['max_step_timeout_s']) + 1
-    steps = [step(i, 'get_pose', timeout_s=L['max_step_timeout_s']) for i in range(1, n + 1)] + [SURF]
+def test_mission_time_budget_scaled_when_possible(v, L):
+    # 5 x 240 s navigate = 1200 s > 900 s; scaling to 180 s each keeps the 60 s minimum -> repair
+    steps = [step(i, 'navigate_to', {'target': 'gate'}, timeout_s=240) for i in range(1, 5)] + [SURF]
     rep = v.validate(plan(steps))
-    assert 'mission_time' in rules(rep)
+    assert rep.ok and 'mission_time' in rules(rep, 'repair')
+    assert sum(s.timeout_s for s in rep.plan.steps) <= L['max_mission_time_s']
+    assert all(s.timeout_s >= 60 for s in rep.plan.steps if s.tool == 'navigate_to')
+
+
+def test_mission_time_budget_rejected_when_too_many_steps(v, L):
+    # 16 navigate steps cannot fit 900 s with >= 60 s each -> reject
+    steps = [step(i, 'navigate_to', {'target': 'gate'}, timeout_s=120) for i in range(1, 17)] + [SURF]
+    rep = v.validate(plan(steps))
+    assert not rep.ok and 'mission_time' in rules(rep)
+
+
+def test_pass_through_on_buoy_is_repaired(v):
+    rep = v.validate(plan([step(1, 'navigate_to', {'target': 'yellow_buoy', 'pass_through': True}), SURF]))
+    assert rep.ok and 'pass_through' in rules(rep, 'repair')
+    assert 'pass_through' not in rep.plan.steps[0].params
+
+
+def test_relative_moves(v):
+    rep = v.validate(plan([step(1, 'navigate_to', {'forward_m': 3, 'depth': 1.0}), SURF]))
+    assert rep.ok, rep.reasons()
+    rep = v.validate(plan([step(1, 'navigate_to', {'forward_m': 3, 'depth': 9.0}), SURF]))
+    assert 'depth_limit' in rules(rep)
+    rep = v.validate(plan([step(1, 'navigate_to', {'forward_m': 3, 'target': 'gate'}), SURF]))
+    assert 'invalid_params' in rules(rep)
 
 
 def test_too_many_steps(v, L):

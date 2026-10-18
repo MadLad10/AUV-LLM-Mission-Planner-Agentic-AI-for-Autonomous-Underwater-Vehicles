@@ -74,6 +74,7 @@ GUIDELINES
 - Dive first with hold_depth (about 1.5 m).
 - Pass the gate: navigate_to {{"target": "gate", "pass_through": true}}.
 - Touch a buoy: navigate_to {{"target": "<colour>_buoy", "standoff_m": 0}}; search_pattern for it first if it may not be in view.
+- Move relative to the vehicle: navigate_to {{"forward_m": 3, "left_m": 0, "depth": 1.0}}.
 - Finish with surface unless the operator says otherwise.
 - Typical timeouts: navigate_to 120, search_pattern 150, hold_depth duration+30, surface 60.
 
@@ -98,8 +99,9 @@ def format_retry(error: str) -> str:
 def validation_retry(reasons: list[str]) -> str:
     bullet = '\n'.join(f'- {r}' for r in reasons)
     return (f'The safety validator REJECTED that plan:\n{bullet}\n'
-            'Return a corrected plan that respects the limits, or {"status": "refuse", ...} if the '
-            'request cannot be done safely. JSON only.')
+            'These are fixable plan errors. Return a corrected plan that keeps the operator\'s goal and '
+            'respects the limits (fix only what is listed). Answer {"status": "refuse", ...} only if the '
+            'operator\'s request itself is unsafe or impossible. JSON only.')
 
 
 def replan_request(prompt: str, done: list[dict], failed: dict, context: dict, attempt: int, max_replans: int) -> str:

@@ -49,6 +49,7 @@ def test_prompt_contains_tools_limits_objects_and_state(cfg):
     for obj in cfg['limits']['known_objects']:
         assert obj in system
     assert f"0.0..{cfg['limits']['max_depth_m']} m" in system
+    assert 'forward_m' in system                                   # relative moves are advertised
     assert 'touch the red buoy' in user and '"battery_percent": 90.0' in user
 
 
@@ -111,6 +112,7 @@ def test_repair_continues_conversation(cfg):
     assert r.status == 'plan' and r.calls[0]['kind'] == 'validation_repair'
     convo = mock.calls[1]
     assert convo[2]['role'] == 'assistant' and 'REJECTED' in convo[3]['content']
+    assert 'fixable' in convo[3]['content']
     assert 'depth 30 m' in convo[3]['content']
 
 
