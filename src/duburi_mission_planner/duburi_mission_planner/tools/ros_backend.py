@@ -110,10 +110,14 @@ class RosBackend(VehicleBackend):
         client = self.clients[key]
         if not client.wait_for_server(timeout_sec=5.0):
             return Outcome(False, f'{key} action server unavailable', 'backend_unavailable')
-        fut = client.send_goal_async(goal)
-        if not _wait(fut, 10.0):
+        handle = None
+        for _ in range(2):                  # a loaded machine can delay the ack; resend once
+            fut = client.send_goal_async(goal)
+            if _wait(fut, 15.0):
+                handle = fut.result()
+                break
+        if handle is None:
             return Outcome(False, f'{key}: goal not acknowledged', 'backend_unavailable')
-        handle = fut.result()
         if not handle.accepted:
             return Outcome(False, f'{key}: goal rejected by vehicle', 'action_failed')
         with self._lock:

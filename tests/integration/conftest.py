@@ -4,6 +4,7 @@ Every sim launch has a hard timeout and cleanup_sim.sh runs before and after.
 """
 import os
 import subprocess
+import sys
 import time
 
 import pytest
@@ -32,15 +33,10 @@ def sim_launcher(tmp_path):
         log = open(tmp_path / 'launch.log', 'w')
         p = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
         procs.append(p)
-        deadline = time.time() + 40
-        while time.time() < deadline:
-            r = subprocess.run(['timeout', '3', 'ros2', 'topic', 'echo', '--once', wait_for],
-                               capture_output=True)
-            if r.returncode == 0:
-                return p
-            if p.poll() is not None:
-                break
-            time.sleep(1)
+        sys.path.insert(0, os.path.join(WS, 'scripts'))
+        from wait_ready import wait_ready
+        if wait_ready(45.0, actions=args.get('stack', 'full') == 'full'):
+            return p
         raise RuntimeError('sim did not come up:\n' + (tmp_path / 'launch.log').read_text()[-3000:])
 
     yield start

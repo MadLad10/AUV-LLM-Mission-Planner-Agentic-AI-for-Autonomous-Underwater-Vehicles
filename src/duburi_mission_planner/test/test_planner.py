@@ -215,8 +215,9 @@ def test_http_error_mapping(monkeypatch):
 def test_dotenv_loader(tmp_path, monkeypatch):
     from duburi_mission_planner.config import load_dotenv
     f = tmp_path / '.env'
-    f.write_text('# c\nGROQ_API_KEY="abc"\nexport OTHER=1\nEMPTY=\n')
-    monkeypatch.delenv('GROQ_API_KEY', raising=False)
-    monkeypatch.delenv('OTHER', raising=False)
+    f.write_text('# c\nDUBURI_TEST_KEY_A="abc"\nexport DUBURI_TEST_KEY_B=1\nDUBURI_TEST_EMPTY=\n')
+    for k in ('DUBURI_TEST_KEY_A', 'DUBURI_TEST_KEY_B'):
+        monkeypatch.setenv(k, 'x')
+        monkeypatch.delenv(k)          # registers an undo, so nothing leaks into other tests
     got = load_dotenv(str(f))
-    assert got == {'GROQ_API_KEY': 'abc', 'OTHER': '1'} and os.environ['GROQ_API_KEY'] == 'abc'
+    assert got == {'DUBURI_TEST_KEY_A': 'abc', 'DUBURI_TEST_KEY_B': '1'} and os.environ['DUBURI_TEST_KEY_A'] == 'abc'

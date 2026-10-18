@@ -22,6 +22,8 @@ targets() {
   done
 }
 
+# the ros2 CLI daemon caches graph state across runs and can wedge (xmlrpc "!rclpy.ok()")
+command -v ros2 >/dev/null 2>&1 && timeout 10 ros2 daemon stop >/dev/null 2>&1
 pids=$(targets)
 [ -n "$pids" ] && kill -INT $pids 2>/dev/null
 for _ in 1 2 3 4 5 6; do

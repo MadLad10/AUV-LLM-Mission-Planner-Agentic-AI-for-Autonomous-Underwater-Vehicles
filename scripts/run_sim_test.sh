@@ -86,19 +86,9 @@ LARGS=(arena:="$ARENA" camera:="$CAMERA" rtf:="$RTF" battery_start:="$BATTERY" s
 setsid timeout $((TIMEOUT + 90)) ros2 launch duburi_sim sim.launch.py "${LARGS[@]}" > "$OUT/launch.log" 2>&1 &
 SIM_PID=$!
 
-# wait for odometry (sim + bridge up)
-ready=false
-for _ in $(seq 1 30); do
-  if timeout 3 ros2 topic echo --once /duburi/odom --field header.stamp > /dev/null 2>&1; then ready=true; break; fi
-  kill -0 "$SIM_PID" 2>/dev/null || break
-  sleep 1
-done
-$ready || { log "sim did not come up (see launch.log)"; finish 92; }
-if [ "$STACK" = full ]; then
-  for _ in $(seq 1 20); do
-    ros2 action list 2>/dev/null | grep -q /duburi/navigate_to && break; sleep 1
-  done
-fi
+# wait for odometry (+ vehicle actions for the full stack); no ros2 CLI daemon involved
+WAIT_ARGS=(--timeout 45); [ "$STACK" = full ] && WAIT_ARGS+=(--actions)
+python3 "$WS/scripts/wait_ready.py" "${WAIT_ARGS[@]}" || { log "sim did not come up (see launch.log)"; finish 92; }
 log "sim ready"
 
 if $BAG; then
