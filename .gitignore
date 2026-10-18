@@ -7,11 +7,11 @@ log/
 # runtime outputs
 traces/*
 !traces/.gitkeep
-results/
 runs/
+# eval: keep summary.md / summary.csv / runs.csv / runs.jsonl, drop raw per-run sim outputs
+eval/results/*/raw/
 *.bag
 rosbag*/
-eval/results/raw/
 __pycache__/
 *.pyc
 .pytest_cache/
