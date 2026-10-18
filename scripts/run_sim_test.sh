@@ -10,18 +10,19 @@
 #   -p PROVIDER    LLM provider for the mission CLI (default: from config)
 #   -b PERCENT     simulated battery start (default: 100)
 #   -r RTF         real-time factor (default: 1.0)
-#   -d SOURCE      detection source: ground_truth | camera (default: ground_truth)
+#   -d SOURCE      detection source: ground_truth | camera (default: config/sim.yaml)
 #   -c             render the camera and save frames (implied by -d camera)
 #   -n             no rosbag
 #   -o DIR         output dir (default: runs/<timestamp>_<slug>)
 #   -s STACK       sim stack: full | minimal (default: full)
+#   -B CLASSES     fault injection: comma-separated classes the detector never reports
 #
 # Output dir: launch.log, mission.log, result.json, referee.json, trace.json (if produced), bag/, frames/
 # Exit code: the mission command's exit code (124 = timeout), or 90+ for harness failures.
 set -u
 WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ARENA=default; TIMEOUT=300; PROVIDER=""; BATTERY=100; RTF=1.0; DET=ground_truth
-CAMERA=false; BAG=true; OUT=""; STACK=full; CMD=""
+ARENA=default; TIMEOUT=300; PROVIDER=""; BATTERY=100; RTF=1.0; DET=""
+CAMERA=false; BAG=true; OUT=""; STACK=full; CMD=""; BLIND=""
 while [ $# -gt 0 ]; do
   case "$1" in
     -a) ARENA="$2"; shift 2;;
@@ -34,6 +35,7 @@ while [ $# -gt 0 ]; do
     -n) BAG=false; shift;;
     -o) OUT="$2"; shift 2;;
     -s) STACK="$2"; shift 2;;
+    -B) BLIND="$2"; shift 2;;
     --cmd) CMD="$2"; shift 2;;
     -h|--help) sed -n 2,21p "$0"; exit 0;;
     *) break;;
@@ -77,8 +79,11 @@ START=$(date +%s.%N)
 trap 'finish 130' INT TERM
 
 log "launching sim arena=$ARENA camera=$CAMERA rtf=$RTF det=$DET battery=$BATTERY stack=$STACK"
-setsid timeout $((TIMEOUT + 90)) ros2 launch duburi_sim sim.launch.py arena:="$ARENA" camera:="$CAMERA" \
-  rtf:="$RTF" detection_source:="$DET" battery_start:="$BATTERY" stack:="$STACK" > "$OUT/launch.log" 2>&1 &
+LARGS=(arena:="$ARENA" camera:="$CAMERA" rtf:="$RTF" battery_start:="$BATTERY" stack:="$STACK"
+       report_file:="$OUT/referee.json")
+[ -n "$DET" ] && LARGS+=(detection_source:="$DET")
+[ -n "$BLIND" ] && LARGS+=(blind_classes:="$BLIND")
+setsid timeout $((TIMEOUT + 90)) ros2 launch duburi_sim sim.launch.py "${LARGS[@]}" > "$OUT/launch.log" 2>&1 &
 SIM_PID=$!
 
 # wait for odometry (sim + bridge up)
@@ -121,9 +126,4 @@ else
 fi
 log "mission command exit=$code"
 
-if [ "$STACK" = full ]; then
-  timeout 10 ros2 service call /duburi_sim/referee_report std_srvs/srv/Trigger '{}' 2>/dev/null \
-    | python3 -c "import sys,re,json; t=sys.stdin.read(); m=re.search(r\"message='(.*)'\)\", t, re.S); print(m.group(1) if m else '{}')" \
-    > "$OUT/referee.json"
-fi
 finish "$code"

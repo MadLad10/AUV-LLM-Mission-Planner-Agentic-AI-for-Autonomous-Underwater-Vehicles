@@ -9,6 +9,7 @@ import time
 import cv2
 import numpy as np
 import rclpy
+from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 
@@ -49,7 +50,8 @@ class Saver(Node):
 def main():
     rclpy.init()
     node = Saver()
-    deadline = time.time() + node.declare_parameter('timeout_s', 30.0).value
+    deadline = time.time() + float(node.declare_parameter(
+        'timeout_s', 30.0, ParameterDescriptor(dynamic_typing=True)).value)
     while rclpy.ok() and node.saved < node.count and time.time() < deadline:
         rclpy.spin_once(node, timeout_sec=0.2)
     ok = node.saved >= node.count

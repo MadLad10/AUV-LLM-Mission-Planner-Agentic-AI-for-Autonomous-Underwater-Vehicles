@@ -21,6 +21,8 @@ def _setup(context):
     stack = LaunchConfiguration('stack').perform(context)
     det_src = LaunchConfiguration('detection_source').perform(context)
     battery_start = float(LaunchConfiguration('battery_start').perform(context))
+    report_file = LaunchConfiguration('report_file').perform(context)
+    blind = LaunchConfiguration('blind_classes').perform(context)
     verbose = LaunchConfiguration('gz_verbose').perform(context)
 
     arena = load_arena(arena_name)
@@ -72,8 +74,9 @@ def _setup(context):
             node('vehicle_server', 'duburi_vehicle_server', {'arena_file': arena_file}),
             node('battery_sim', 'duburi_battery', {'initial_percent': battery_start}),
             node('detector_node', 'duburi_detector',
-                 {'arena_file': arena_file, 'detection_source': det_src, 'camera_enabled': camera}),
-            node('referee_node', 'duburi_referee', {'arena_file': arena_file}),
+                 dict({'arena_file': arena_file, 'camera_enabled': camera, 'blind_classes': blind},
+                      **({'detection_source': det_src} if det_src else {}))),
+            node('referee_node', 'duburi_referee', {'arena_file': arena_file, 'report_file': report_file}),
         ]
     return actions
 
@@ -84,8 +87,11 @@ def generate_launch_description():
         DeclareLaunchArgument('camera', default_value='false', description='render the front camera'),
         DeclareLaunchArgument('rtf', default_value='1.0', description='real-time factor (0 = max)'),
         DeclareLaunchArgument('stack', default_value='full', description='minimal | full'),
-        DeclareLaunchArgument('detection_source', default_value='ground_truth',
-                              description='ground_truth | camera'),
+        DeclareLaunchArgument('detection_source', default_value='',
+                              description='ground_truth | camera (empty = config/sim.yaml)'),
+        DeclareLaunchArgument('report_file', default_value='', description='referee JSON output'),
+        DeclareLaunchArgument('blind_classes', default_value='',
+                              description='comma-separated classes the detector never reports'),
         DeclareLaunchArgument('battery_start', default_value='100.0'),
         DeclareLaunchArgument('gz_verbose', default_value='1'),
         OpaqueFunction(function=_setup),

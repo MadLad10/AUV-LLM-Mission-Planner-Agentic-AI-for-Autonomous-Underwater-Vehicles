@@ -22,6 +22,8 @@ duburi_battery:
     w_per_newton: 1.2
 duburi_detector:
   ros__parameters:
+    # Config flag for the detection fallback: ground_truth (reliable) | camera (HSV on rendered frames)
+    detection_source: ground_truth
     hfov_deg: 80.0
     vfov_deg: 62.0
     max_range_m: 8.0

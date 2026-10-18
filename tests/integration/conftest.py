@@ -25,6 +25,8 @@ def sim_launcher(tmp_path):
     subprocess.run([CLEANUP], capture_output=True, timeout=30)
 
     def start(timeout_s=180, wait_for='/duburi/odom', **args):
+        args.setdefault('report_file', str(tmp_path / 'referee.json'))
+        args.setdefault('rtf', os.environ.get('DUBURI_TEST_RTF', '3.0'))
         cmd = ['timeout', str(timeout_s), 'ros2', 'launch', 'duburi_sim', 'sim.launch.py']
         cmd += [f'{k}:={v}' for k, v in args.items()]
         log = open(tmp_path / 'launch.log', 'w')
@@ -50,3 +52,9 @@ def sim_launcher(tmp_path):
             except subprocess.TimeoutExpired:
                 p.kill()
     subprocess.run([CLEANUP], capture_output=True, timeout=30)
+
+
+def read_referee(tmp_path):
+    import json
+    p = tmp_path / 'referee.json'
+    return json.loads(p.read_text()) if p.exists() else {}
