@@ -86,7 +86,13 @@ class MissionRunner:
     # ------------------------------------------------------------ main entry
     def run(self, prompt: str, dry_run: bool = False, wall_timeout_s: Optional[float] = None,
             mission_id: Optional[str] = None) -> dict:
-        trace = MissionTrace(prompt, self.provider.describe(), self.trace_dir, mission_id)
+        trace = MissionTrace(prompt, self.provider.describe(), self.trace_dir, mission_id,
+                             config={'backend': self.cfg.get('backend'), 'limits': self.cfg['limits'],
+                                     'executor': self.cfg.get('executor', {}), 'tools': self.cfg.get('tools', {}),
+                                     'planner': {'max_validation_retries': self.max_validation_retries,
+                                                 'max_format_retries': self.planner.max_format_retries}},
+                             env={'vehicle_backend': type(self.tools.backend).__name__,
+                                  'dry_run': dry_run})
         stats = {'plan_index': 0, 'replans': 0, 'unsafe_plans_caught': 0, 'repairs': 0, 'format_errors': 0,
                  'llm_calls': [], 'steps_executed': 0}
         sim_t0 = self.tools.backend.now()

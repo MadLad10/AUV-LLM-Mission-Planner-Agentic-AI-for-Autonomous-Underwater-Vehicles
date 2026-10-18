@@ -48,8 +48,12 @@ def test_full_mission_succeeds_and_referee_agrees(sim_launcher, tmp_path):
     ref = read_referee(tmp_path)
     assert res['outcome'] == 'succeeded', res['reason']
     assert ref['gate_passed'] and ref['buoys_touched'] == ['red_buoy'] and ref['surfaced_at_end'], ref
+    from duburi_mission_planner.tracing import validate_trace
     trace = json.load(open(res['trace']))
+    validate_trace(trace)
     assert len(trace['tool_calls']) == 4 and trace['outcome']['outcome'] == 'succeeded'
+    assert trace['env']['vehicle_backend'] == 'RosBackend' and trace['totals']['tool_failures'] == 0
+    assert all(c['sim_end'] >= c['sim_start'] for c in trace['tool_calls'])
 
 
 def test_low_battery_aborts_and_surfaces(sim_launcher, tmp_path):
