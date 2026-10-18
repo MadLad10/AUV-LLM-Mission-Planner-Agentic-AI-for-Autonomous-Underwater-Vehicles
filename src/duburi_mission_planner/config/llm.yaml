@@ -5,10 +5,11 @@ default_provider: ollama
 providers:
   ollama:                       # local, CPU, free
     type: ollama
-    host_env: OLLAMA_HOST
-    host: http://127.0.0.1:11434
+    host_env: DUBURI_OLLAMA_HOST
+    host: http://127.0.0.1:11436     # dedicated duburi-ollama container (scripts/start_ollama.sh)
     model: qwen2.5:3b-instruct
-    num_ctx: 8192
+    num_ctx: 4096
+    keep_alive: 30m
     temperature: 0.1
     seed: 0
     constrained: true           # pass the plan JSON schema as `format` (grammar-constrained decoding)

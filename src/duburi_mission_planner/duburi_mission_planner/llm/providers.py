@@ -77,6 +77,9 @@ class MockProvider(LLMProvider):
 
     def __init__(self, name='mock', cfg=None, responses: Union[list, Callable, None] = None):
         super().__init__(name, cfg or {'model': 'mock'})
+        if responses is None and (cfg or {}).get('responses_file'):
+            with open(cfg['responses_file']) as f:       # JSON list of outputs, used in order
+                responses = json.load(f)
         self.responses = responses if responses is not None else []
         self.calls: list[list[dict]] = []
 

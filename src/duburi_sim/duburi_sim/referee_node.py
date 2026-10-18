@@ -37,6 +37,7 @@ class Referee(Node):
         self.create_subscription(Odometry, '/duburi/odom', self.on_odom, 20)
         self.pub = self.create_publisher(String, '/duburi_sim/events', 10)
         self.create_service(Trigger, '/duburi_sim/referee_report', self.on_report)
+        self.create_timer(1.0, self.write)      # keep the on-disk report (final pose) fresh
 
     def t(self):
         return round(self.get_clock().now().nanoseconds * 1e-9, 2)

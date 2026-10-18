@@ -19,7 +19,7 @@ def _available(name):
     llm = load_llm_config()
     p = llm['providers'][name]
     if p['type'] == 'ollama':
-        host = os.environ.get('OLLAMA_HOST', p['host'])
+        host = os.environ.get(p.get('host_env', ''), '') or p['host']
         try:
             urllib.request.urlopen(host + '/api/version', timeout=3)
             return True
