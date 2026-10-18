@@ -107,7 +107,14 @@ class VehicleServer(Node):
             self.mode_pub.publish(String(data=self.mode))
 
     # ---------------------------------------------------------------- goal plumbing
+    def _pose_str(self):
+        if self.pose is None:
+            return 'none'
+        x, y, z, yaw = self.pose
+        return f'({x:.2f}, {y:.2f}, depth {-z:.2f}, yaw {math.degrees(yaw):.0f})'
+
     def _claim(self):
+        self.get_logger().info(f'goal start (mode {self.mode}) pose={self._pose_str()}')
         with self.lock:
             self.active += 1
             return self.active
@@ -174,6 +181,7 @@ class VehicleServer(Node):
             time.sleep(TICK)
 
     def _finish(self, gh, result, ok):
+        self.get_logger().info(f'goal finished ok={ok}: {getattr(result, "message", "")} pose={self._pose_str()}')
         if ok:
             gh.succeed()
         elif gh.is_cancel_requested:

@@ -124,14 +124,15 @@ class FakeBackend(VehicleBackend):
         p = self._pose
         t_start = self.t
         self._move(p.x, p.y, depth, p.yaw, timeout_s)
-        probes = [(0, 0)] if pattern == 'yaw_sweep' else \
-            [(dx, dy) for dx in range(-int(radius_m), int(radius_m) + 1, 3)
-             for dy in range(-int(radius_m), int(radius_m) + 1, 3)]
+        r = int(radius_m)
+        probes = [(0, 0)] if pattern == 'yaw_sweep' else sorted(   # nearest first, like a real spiral
+            [(dx, dy) for dx in range(-r, r + 1, 3) for dy in range(-r, r + 1, 3)
+             if math.hypot(dx, dy) <= radius_m], key=lambda q: math.hypot(*q))
         for dx, dy in probes:
             for k in range(6):
                 yaw = p.yaw + k * math.pi / 3
                 self._pose = Pose(p.x + dx, p.y + dy, depth, yaw)
-                self._advance(3.0)
+                self._advance(1.0)
                 if self.t - t_start > timeout_s:
                     self._pose = Pose(p.x, p.y, depth, p.yaw)
                     return Outcome(False, f'search timed out after {timeout_s:.0f}s', 'timeout', {'found': False})

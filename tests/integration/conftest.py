@@ -28,6 +28,9 @@ def sim_launcher(tmp_path):
     def start(timeout_s=180, wait_for='/duburi/odom', **args):
         args.setdefault('report_file', str(tmp_path / 'referee.json'))
         args.setdefault('rtf', os.environ.get('DUBURI_TEST_RTF', '3.0'))
+        before = subprocess.run(['bash', '-c', 'ps -eo pid,etimes,args | grep -E "duburi_|ign gazebo|parameter_bridge"'
+                                 ' | grep -v grep'], capture_output=True, text=True).stdout
+        (tmp_path / 'procs_before_launch.txt').write_text(before)
         cmd = ['timeout', str(timeout_s), 'ros2', 'launch', 'duburi_sim', 'sim.launch.py']
         cmd += [f'{k}:={v}' for k, v in args.items()]
         log = open(tmp_path / 'launch.log', 'w')

@@ -109,13 +109,38 @@ class MissionRunner:
         wd.mission_t0 = sim_t0
         wd.start()
         executor = Executor(self.tools, self.validator, self.cfg, on_event=self._event_cb(trace, stats))
+        done: list[dict] = []          # briefs of successful steps across all plans
         try:
             self.on_status('executing', 0, 0, plan.summary)
             res = executor.run(plan, wd, stats['plan_index'])
+            done += [r.brief() for r in res.records if r.success]
+            while res.status == 'step_failed' and stats['replans'] < self.max_replans:
+                stats['replans'] += 1
+                failed = {'step': res.failed_step.model_dump(), 'result': res.failed_record.brief()}
+                ctx = self.context()
+                ctx['mission_elapsed_s'] = round(wd.elapsed(), 1)
+                trace.data['replans'].append({'t': trace._t(), 'attempt': stats['replans'], 'failed': failed,
+                                              'context': ctx})
+                self.on_status('replanning', res.failed_step.id, stats['replans'],
+                               f'step {res.failed_step.id} failed: {res.failed_record.detail}')
+                self.log(f'[replan {stats["replans"]}/{self.max_replans}] step {res.failed_step.id} '
+                         f'({res.failed_step.tool}) failed -> asking the LLM for a new plan')
+                pr = self.planner.replan(prompt, done, failed, ctx, stats['replans'], self.max_replans)
+                status, new_plan, reason = self._validated(pr, trace, stats, 'replan')
+                if status != 'ok':
+                    return self._abort(executor, trace, stats, f'replan {stats["replans"]} {status}: {reason}',
+                                       plan, sim_t0)
+                plan = new_plan
+                self.log(f'[replan {stats["replans"]}] {len(plan.steps)} steps: {self._describe(plan)}')
+                res = executor.run(plan, wd, stats['plan_index'])
+                done += [r.brief() for r in res.records if r.success]
             if res.status == 'completed':
                 return self._finish(trace, stats, 'succeeded', '', plan, sim_t0)
-            reason = res.abort_reason if res.status == 'abort' else \
-                f'step {res.failed_step.id} ({res.failed_step.tool}) failed: {res.failed_record.detail}'
+            if res.status == 'abort':
+                reason = res.abort_reason
+            else:
+                reason = (f'step {res.failed_step.id} ({res.failed_step.tool}) failed: {res.failed_record.detail}'
+                          + (f'; replans exhausted ({self.max_replans})' if self.max_replans else ''))
             return self._abort(executor, trace, stats, reason, plan, sim_t0)
         finally:
             wd.stop()

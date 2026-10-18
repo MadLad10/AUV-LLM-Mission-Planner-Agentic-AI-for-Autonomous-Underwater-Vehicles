@@ -161,8 +161,8 @@ class ToolRegistry:
             return False, {}, bad, 'unsafe_target'
         radius = min(p.radius_m, self.limits.get('max_search_radius_m', 12.0))
         o = self.backend.search(p.target, p.pattern, radius, depth, timeout_s)
-        if not o.ok and o.code is None:
-            o.code = 'not_found'
+        if not o.ok and o.code in (None, 'action_failed') and o.data.get('found') is False:
+            o.code = 'not_found'          # pattern finished without seeing the target
         return self._from_outcome(o, {'target': p.target, 'pattern': p.pattern})
 
     def _hold_depth(self, p, timeout_s):
