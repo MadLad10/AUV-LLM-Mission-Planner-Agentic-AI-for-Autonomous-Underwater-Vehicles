@@ -1,7 +1,8 @@
-# AUV LLM Mission Planner
+# AUV LLM Mission Planner: Agentic AI for Autonomous Underwater Vehicles
 
-**Tell an underwater robot what to do in plain English, and it plans and carries out the mission
-safely, in simulation.**
+**An agentic AI system: an LLM agent that turns plain-English commands into safe, validated
+missions for an autonomous underwater vehicle (AUV), with AI guardrails, autonomous replanning and
+a full evaluation suite. Built with ROS 2, Gazebo and a local LLM.**
 
 ```
 mission "pass through the gate, touch the red buoy, then surface; abort if battery is below 20%"
@@ -11,6 +12,13 @@ mission "pass through the gate, touch the red buoy, then surface; abort if batte
 |---|---|
 | ![spectator](docs/media/gate_red_buoy_spectator.gif) | ![onboard](docs/media/gate_red_buoy_onboard.gif) |
 
+**Keywords:** Agentic AI · LLM agents · AI agent tool calling · Plan-and-execute agent ·
+Autonomous replanning and self-correction · Structured outputs (JSON Schema, Pydantic) ·
+Constrained decoding · AI guardrails and safety validation · LLM evaluation (evals) and
+benchmarking · LLM observability and tracing · Prompt engineering · Local LLM inference (Ollama,
+Qwen 2.5) · OpenAI-compatible APIs (Groq) · ROS 2 · Gazebo simulation · Robotics autonomy ·
+Autonomous underwater vehicles (AUV) · Marine robotics · Python · Docker · pytest
+
 ---
 
 ## 1. What we did
@@ -19,21 +27,25 @@ We built a "mission planner" for an **autonomous underwater vehicle (AUV)**, a s
 submarine like the ones student teams race at RoboSub.
 
 Normally, every new task for an AUV means writing new code. Here, an operator just types the
-mission in plain English. An **AI language model (LLM)** turns the sentence into a step-by-step
-plan, and the robot carries it out.
+mission in plain English. An **LLM agent** (an AI language model that uses tools) turns the
+sentence into a step-by-step plan, and the robot carries it out. That makes it an **agentic AI
+system**: the AI plans, acts through tools, observes the results, and re-plans when something goes
+wrong.
 
-Letting an AI drive a robot is risky: it can misunderstand, make things up, or ask for something
-dangerous. So the project is really about doing it **safely**:
+Letting an AI drive a robot is risky: it can misunderstand, hallucinate, or ask for something
+dangerous. So the project is really about **safe, reliable agentic AI**:
 
-- The AI **never controls the motors**. It can only suggest a plan using 8 safe, high-level
-  actions such as "go to the gate" or "surface".
-- Every plan is checked by a **safety checker** (ordinary code, not AI) before the robot moves.
-- If something goes wrong mid-mission, the robot **asks the AI for a new plan**, and if that fails
-  too, it **gives up safely and surfaces**.
-- We tested everything in a **3D physics simulation** with 25 missions, from easy ones to
-  deliberately impossible and dangerous ones, and scored them with an **independent referee**.
+- **Tool calling with guardrails.** The AI **never controls the motors**. It can only use 8 safe,
+  high-level tools such as "go to the gate" or "surface".
+- **Deterministic safety validation.** Every plan is checked by a **safety checker** (ordinary code,
+  not AI) before the robot moves.
+- **Autonomous replanning.** If something goes wrong mid-mission, the agent reads what happened and
+  **makes a new plan**. If that fails too, it **gives up safely and surfaces**.
+- **Rigorous evaluation.** We tested everything in a **3D physics simulation** with 25 missions,
+  from easy ones to deliberately impossible and dangerous ones, scored by an **independent
+  referee**.
 
-## 2. How it works
+## 2. How it works: the agentic loop (plan, act, observe, replan)
 
 ```mermaid
 flowchart LR
@@ -46,20 +58,24 @@ flowchart LR
   F["Referee<br/>(checks what really happened)"] -.-> E
 ```
 
-1. **Plan.** The AI reads the mission and writes a plan: a list of steps such as *dive to 1.5 m → go
-   through the gate → look for the red buoy → touch it → surface*. It can also **refuse** if the
-   request is impossible ("touch the purple buoy" when there is none) or unsafe ("set all
-   thrusters to 100%").
-2. **Check.** The safety checker compares the plan with fixed limits: maximum depth 4 m, stay
-   inside the pool, keep enough battery, don't take too long, only use allowed actions. It
-   **rejects** dangerous plans (and tells the AI why) and **fixes** small omissions, for example by
-   adding "surface at the end" or a low-battery abort.
-3. **Do.** The executor runs the plan one step at a time. Before each step it re-checks the battery
-   and the time left. A watchdog surfaces the robot immediately if the battery runs low.
-4. **Recover.** If a step fails (for example, the buoy isn't where expected), the executor tells
-   the AI what happened and asks for a new plan. It tries this up to 2 times, then aborts safely.
-5. **Record.** Every mission saves a full log: what was asked, every AI answer, every step and its
-   result, time taken, and cost.
+1. **Plan (LLM planning, structured output).** The AI reads the mission and writes a plan as
+   JSON that must match a fixed schema: a list of tool calls such as *dive to 1.5 m → go through
+   the gate → search for the red buoy → touch it → surface*. Constrained decoding makes the output
+   always valid JSON. The agent can also **refuse** impossible requests ("touch the purple buoy"
+   when there is none) and unsafe ones ("set all thrusters to 100%").
+2. **Check (AI guardrails).** The safety checker compares the plan with fixed limits: maximum depth
+   4 m, stay inside the pool, keep enough battery, don't take too long, only use allowed tools, and
+   don't change what the operator asked for. It **rejects** dangerous plans (and tells the AI why,
+   so it can self-correct) and **repairs** small omissions, for example by adding "surface at the
+   end" or a low-battery abort.
+3. **Act (tool execution).** The executor runs the plan one tool call at a time as ROS 2 actions.
+   Before each step it re-checks the battery and the time left. A watchdog surfaces the robot
+   immediately if the battery runs low.
+4. **Observe and replan (closed-loop autonomy).** If a step fails (for example, the buoy isn't
+   where expected), the executor gives the agent the observation and asks for a new plan. It tries
+   this up to 2 times, then aborts safely.
+5. **Trace (LLM observability).** Every mission saves a full trace: the prompt, every LLM call
+   (tokens, latency, cost), every plan, every tool call and its result, and the outcome.
 
 ## 3. Hardware and software
 
@@ -118,9 +134,10 @@ missed detection.
 A low-level controller turns "go to this point" into motor commands. This is the only part of the
 system allowed to touch the motors.
 
-## 6. How we tested it
+## 6. How we tested it (LLM evaluation)
 
-We wrote **25 test missions** in six groups:
+We built an **evaluation harness** with **25 test missions** in six groups, including adversarial
+(impossible and unsafe) prompts:
 
 | Group | Count | Example | What counts as correct |
 |---|---|---|---|
@@ -180,7 +197,22 @@ Across all 125 test runs, the robot **never hit a pool wall**, went past the 4 m
 once (the 4.27 m overshoot above, since fixed), and the AI's output was **always valid** (zero
 formatting errors).
 
-## 9. Try it yourself
+## 9. Skills demonstrated
+
+| Skill | Where it shows up in this project |
+|---|---|
+| **Agentic AI / LLM agents** | A plan-and-execute agent that uses tools, observes results and replans on failure |
+| **Tool calling / function calling** | 8 typed tools with JSON schemas; the agent can only act through them |
+| **Structured outputs** | Plans are JSON validated with Pydantic, plus grammar-constrained decoding in Ollama |
+| **AI safety and guardrails** | Deterministic validator, runtime checks, refusal of unsafe and impossible requests, intent checks against silent substitution |
+| **LLM evaluation (evals)** | A 25-mission benchmark with ground-truth scoring, pass and safety metrics, and iterated error analysis |
+| **LLM observability** | Per-mission traces with tokens, latency, cost and every decision |
+| **Prompt engineering** | System prompt generated from the tool schemas and limits; rule-aware self-correction prompts |
+| **Model-agnostic LLM integration** | One interface for a local model (Ollama, Qwen 2.5 3B) and cloud APIs (Groq, Gemini, OpenRouter) |
+| **Robotics and autonomy** | ROS 2 nodes, actions and services; Gazebo physics; PID control; an underwater vehicle model |
+| **Software engineering** | 130 unit tests and 9 simulation tests (pytest), Docker, reproducible scripts |
+
+## 10. Try it yourself
 
 **Setup** (Ubuntu 22.04):
 ```bash
@@ -211,7 +243,7 @@ To use the free cloud AI instead of the local one, copy `.env.example` to `.env`
 `GROQ_API_KEY` from console.groq.com, and add `--provider groq` (or `-p groq` for
 `run_sim_test.sh`).
 
-## 10. Limitations
+## 11. Limitations
 
 - **Simulation only.** The robot and the pool are simplified stand-ins. The code includes an
   adapter for the team's real vehicle software, but it hasn't been tested on hardware.
