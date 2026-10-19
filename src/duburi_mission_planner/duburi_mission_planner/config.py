@@ -56,7 +56,7 @@ def load_llm_config(path: str | None = None) -> dict[str, Any]:
 def find_workspace_root(start: str | None = None) -> str | None:
     d = os.path.abspath(start or os.environ.get('DUBURI_WS') or os.getcwd())
     while d != '/':
-        if os.path.isfile(os.path.join(d, 'CLAUDE.md')) and os.path.isdir(os.path.join(d, 'src')):
+        if os.path.isdir(os.path.join(d, 'src', 'duburi_mission_planner')) and os.path.isdir(os.path.join(d, 'scripts')):
             return d
         d = os.path.dirname(d)
     return None

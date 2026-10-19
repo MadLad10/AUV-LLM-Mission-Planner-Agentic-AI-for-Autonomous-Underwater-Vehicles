@@ -61,7 +61,7 @@ class MissionRunner:
                        result.plan.model_dump() if result.plan else None, result.status, result.reason)
             if result.status != 'plan':
                 return result.status, None, result.reason
-            rep = self.validator.validate(result.plan)
+            rep = self.validator.validate(result.plan, prompt=self._prompt)
             trace.validation(idx, rep.as_dict())
             stats['repairs'] += len(rep.repaired)
             if rep.ok:
@@ -86,6 +86,7 @@ class MissionRunner:
     # ------------------------------------------------------------ main entry
     def run(self, prompt: str, dry_run: bool = False, wall_timeout_s: Optional[float] = None,
             mission_id: Optional[str] = None) -> dict:
+        self._prompt = prompt
         trace = MissionTrace(prompt, self.provider.describe(), self.trace_dir, mission_id,
                              config={'backend': self.cfg.get('backend'), 'limits': self.cfg['limits'],
                                      'executor': self.cfg.get('executor', {}), 'tools': self.cfg.get('tools', {}),

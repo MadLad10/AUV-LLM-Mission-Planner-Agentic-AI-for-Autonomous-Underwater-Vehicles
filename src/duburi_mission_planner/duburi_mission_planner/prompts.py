@@ -99,7 +99,8 @@ def format_retry(error: str) -> str:
             'Return ONLY the corrected JSON object in the required format.')
 
 
-LIMIT_RULES = ('depth_limit', 'geofence', 'unknown_object', 'tool_not_allowed', 'battery_abort')
+LIMIT_RULES = ('depth_limit', 'geofence', 'unknown_object', 'tool_not_allowed', 'battery_abort',
+               'off_mission_target')
 
 
 def validation_retry(reasons: list[str]) -> str:

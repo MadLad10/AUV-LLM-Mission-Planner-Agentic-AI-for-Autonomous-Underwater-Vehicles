@@ -128,7 +128,7 @@ Keys come from `.env` (`GROQ_API_KEY`, …); `.env.example` is committed and `.e
 
 ```
 duburi_llm_ws/
-├── CLAUDE.md  PLAN.md  README.md  .gitignore  .env.example  requirements.txt
+├── PLAN.md  README.md  .gitignore  .env.example
 ├── scripts/  setup_venv.sh  start_ollama.sh  cleanup_sim.sh  run_sim_test.sh  mission
 ├── eval/     run_eval.py  missions.yaml  results/
 ├── traces/   (gitignored)

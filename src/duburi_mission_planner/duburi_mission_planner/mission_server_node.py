@@ -57,6 +57,10 @@ class MissionServer(Node):
         if not self.busy.acquire(blocking=False):
             resp.accepted, resp.message = False, 'another mission is running'
             return resp
+        if not self.backend.wait_ready(15.0):      # pose, battery and vehicle actions must be live first
+            self.busy.release()
+            resp.accepted, resp.message = False, 'vehicle not ready (no pose/battery/actions yet)'
+            return resp
         mission_id = new_mission_id()
         try:
             provider = make_provider(self.llm_cfg, req.provider or None)

@@ -61,7 +61,7 @@ def test_success_end_to_end_with_trace(cfg, tmp_path):
 
 def test_dry_run_moves_nothing(cfg, tmp_path):
     r, b = runner(cfg, [GOOD], tmp_path)
-    res = r.run('x', dry_run=True)
+    res = r.run('pass the gate, touch the red buoy, surface', dry_run=True)
     assert res['outcome'] == 'planned' and res['final_plan']['steps'][0]['tool'] == 'hold_depth'
     assert b.calls == []
 
@@ -109,10 +109,10 @@ def test_on_failure_continue_and_abort(cfg, tmp_path):
     bad = {'tool': 'navigate_to', 'params': {'target': 'red_buoy'}, 'timeout_s': 60, 'on_failure': 'continue'}
     hidden = [{'id': 'gate', 'class': 'gate', 'x': 8, 'y': 0, 'z': -1.5}]
     r, b = runner(cfg, [P([DIVE, bad, SURF])], tmp_path, objects=hidden)
-    assert r.run('x')['outcome'] == 'succeeded'
+    assert r.run('dive, touch the red buoy if you can, surface')['outcome'] == 'succeeded'
     bad['on_failure'] = 'abort'
     r, b = runner(cfg, [P([DIVE, bad, SURF])], tmp_path, objects=hidden)
-    res = r.run('x')
+    res = r.run('dive, touch the red buoy, surface')
     assert res['outcome'] == 'aborted' and 'step 2' in res['reason']
 
 
@@ -124,7 +124,7 @@ def test_plan_abort_step(cfg, tmp_path):
 
 def test_low_battery_precheck_aborts_before_motion(cfg, tmp_path):
     r, b = runner(cfg, [GOOD], tmp_path, battery_start=22.0)
-    res = r.run('x')
+    res = r.run('pass the gate, touch the red buoy, surface')
     assert res['outcome'] == 'aborted' and 'battery' in res['reason']
     assert not any(c[0] in ('navigate', 'hold_depth') for c in b.calls) and b.emergency
 
@@ -133,7 +133,7 @@ def test_battery_drain_mid_mission_triggers_abort(cfg, tmp_path):
     # 1 %/s drain: the long gate leg drains below the 30 % threshold
     r, b = runner(cfg, [P([DIVE, GATE, RED, SURF], aborts=[{'type': 'battery_below', 'percent': 30}])], tmp_path,
                   battery_start=60.0, drain_pct_per_s=1.0)
-    res = r.run('x')
+    res = r.run('pass the gate, touch the red buoy, surface')
     assert res['outcome'] == 'aborted' and 'battery' in res['reason'] and b.surfaced
 
 
@@ -178,6 +178,6 @@ def test_cli_exit_codes(monkeypatch, tmp_path, capsys):
     for key, code in (('ok', 0), ('refuse', 3)):
         monkeypatch.setattr('duburi_mission_planner.llm.providers.make_provider',
                             lambda cfg, name=None, _r=responses[key]: MockProvider(responses=list(_r)))
-        rc = cli.main(['--backend', 'fake', '--trace-dir', str(tmp_path), '--json', 'do it'])
+        rc = cli.main(['--backend', 'fake', '--trace-dir', str(tmp_path), '--json', 'pass the gate, touch the red buoy, then surface'])
         out = json.loads(capsys.readouterr().out)
         assert rc == code and out['outcome'] in ('succeeded', 'refused')

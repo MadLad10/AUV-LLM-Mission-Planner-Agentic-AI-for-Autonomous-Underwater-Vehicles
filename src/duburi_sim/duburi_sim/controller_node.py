@@ -23,12 +23,14 @@ SURGE_ARM = abs(THRUSTERS['surge_left'][1])
 
 
 class Pid:
-    def __init__(self, kp, ki, kd, i_lim):
+    def __init__(self, kp, ki, kd, i_lim, i_zone=None):
         self.kp, self.ki, self.kd, self.i_lim = kp, ki, kd, i_lim
+        self.i_zone = i_zone      # anti-windup: integrate only when |err| < i_zone
         self.i = 0.0
 
     def __call__(self, err, rate, dt):
-        self.i = max(-self.i_lim, min(self.i_lim, self.i + err * dt))
+        if self.i_zone is None or abs(err) < self.i_zone:
+            self.i = max(-self.i_lim, min(self.i_lim, self.i + err * dt))
         return self.kp * err + self.ki * self.i - self.kd * rate
 
     def reset(self):
@@ -44,7 +46,7 @@ class Controller(Node):
         kp_xy, kd_xy = p('kp_xy', 30.0).value, p('kd_xy', 45.0).value
         self.pid_x = Pid(kp_xy, 0.0, kd_xy, 1.0)
         self.pid_y = Pid(kp_xy, 0.0, kd_xy, 1.0)
-        self.pid_z = Pid(p('kp_z', 70.0).value, p('ki_z', 15.0).value, p('kd_z', 50.0).value, 1.5)
+        self.pid_z = Pid(p('kp_z', 70.0).value, p('ki_z', 15.0).value, p('kd_z', 50.0).value, 1.5, i_zone=0.25)
         self.pid_yaw = Pid(p('kp_yaw', 8.0).value, 0.0, p('kd_yaw', 5.0).value, 0.5)
 
         self.pose = None          # (x, y, z, yaw)

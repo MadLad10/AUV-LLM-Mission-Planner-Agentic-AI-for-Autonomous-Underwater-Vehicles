@@ -39,6 +39,7 @@ class VehicleServer(Node):
         self.max_speed = self.declare_parameter('max_speed', 0.6).value
         self.max_yaw_rate = self.declare_parameter('max_yaw_rate', 0.6).value
         self.settle_s = self.declare_parameter('settle_s', 1.0).value
+        self.max_vz = self.declare_parameter('max_vertical_speed', 0.3).value
         self.stall_s = self.declare_parameter('surface_stall_s', 4.0).value       # no ascent progress -> stalled
         self.clear_m = self.declare_parameter('surface_clear_m', 1.5).value       # horizontal move to get clear
         self.hard_max_depth = self.declare_parameter('hard_max_depth_m', 4.6).value
@@ -168,6 +169,8 @@ class VehicleServer(Node):
             vd = math.sqrt(vx * vx + vy * vy + vz * vz)
             if vd > 1e-6 and not turning and lag < CARROT_LEAD:
                 step = min(vd, speed * dt)
+                if abs(vz) > 1e-6:                       # gentle vertical approach: no depth overshoot
+                    step = min(step, self.max_vz * dt * vd / abs(vz))
                 cx, cy, cz = cx + vx / vd * step, cy + vy / vd * step, cz + vz / vd * step
             self.set_sp(cx, cy, cz, cyaw)
             err = math.dist((x, y, z), (tx, ty, tz))

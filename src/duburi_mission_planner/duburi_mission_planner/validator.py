@@ -9,6 +9,7 @@ Also provides precheck_step(): a runtime gate evaluated right before each step e
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import asdict, dataclass, field
 from typing import Optional
 
@@ -21,6 +22,35 @@ from duburi_mission_planner.tools.schemas import TOOL_PARAMS
 log = logging.getLogger('duburi.validator')
 
 MOTION_TOOLS = {'navigate_to', 'search_pattern', 'hold_depth'}
+GENERIC_ALL = ('buoys', 'all buoys', 'every buoy', 'each buoy', 'all three', 'all objects', 'everything')
+
+
+_DEPTH_RE = re.compile(r'(\d+(?:\.\d+)?)\s*(?:m\b|meters?\b|metres?\b)', re.I)
+
+
+def requested_depths(prompt: str) -> list[float]:
+    """Depths the operator states explicitly ('dive to 50 meters', 'at 2 m depth').
+    Distances like 'move 3 m forward' are not depths: only numbers near dive/depth/deep words count."""
+    p = prompt.lower()
+    out = []
+    for m in _DEPTH_RE.finditer(p):
+        window = p[max(0, m.start() - 25):m.end() + 15]
+        if any(w in window for w in ('dive', 'depth', 'deep', 'descend', 'down to', 'go down')):
+            out.append(float(m.group(1)))
+    return out
+
+
+def mentioned_objects(prompt: str, known: list[str]) -> set[str]:
+    """Objects the operator's request refers to: by class name or by colour word; the gate always."""
+    p = prompt.lower().replace('_', ' ')
+    out = {'gate'}
+    generic = any(g in p for g in GENERIC_ALL)
+    for k in known:
+        words = k.replace('_', ' ').split()
+        if k.replace('_', ' ') in p or (len(words) == 2 and words[1] == 'buoy' and
+                                         (words[0] in p.split() or words[0] + ',' in p or generic)):
+            out.add(k)
+    return out
 DEFAULT_TIMEOUT_S = 60.0
 # shortest timeout the validator will scale a step down to (sim seconds)
 # shortest useful timeout per tool (sim seconds): shorter ones are raised, and over-budget plans are never
@@ -77,7 +107,7 @@ class SafetyValidator:
         return True
 
     # ------------------------------------------------------------ static validation
-    def validate(self, plan: Optional[MissionPlan]) -> ValidationReport:
+    def validate(self, plan: Optional[MissionPlan], prompt: Optional[str] = None) -> ValidationReport:
         rep = ValidationReport(ok=False, plan=None)
         if plan is None or not plan.steps:
             self._reject(rep, 'empty_plan', 'the plan has no steps')
@@ -96,6 +126,8 @@ class SafetyValidator:
                     s.id = i
 
         self._fill_detected_targets(rep, plan)
+        if prompt is not None:
+            self._check_intent(rep, plan, prompt)
         seen_abort = False
         for s in plan.steps:
             if seen_abort:
@@ -191,6 +223,24 @@ class SafetyValidator:
         if speed is not None and speed > L['max_speed_mps']:
             if self._repair(rep, 'speed_limit', f'speed {speed} clamped to {L["max_speed_mps"]}', s.id):
                 s.params['speed'] = float(L['max_speed_mps'])
+
+    def _check_intent(self, rep, plan: MissionPlan, prompt: str):
+        """Every object the plan goes after must be one the operator asked for. Stops a model from
+        'repairing' an impossible request (purple buoy) into a different mission (green buoy).
+        The gate is always allowed (it is a waypoint on the way to the buoys); a generic 'buoys' / 'all'
+        allows every buoy."""
+        for d in requested_depths(prompt):
+            if d > self.L['max_depth_m']:
+                self._reject(rep, 'depth_limit', f'the operator asked for {d:g} m, beyond the {self.L["max_depth_m"]} m '
+                             f'limit: refuse - never run a shallower substitute')
+                break
+        allowed = mentioned_objects(prompt, self.L['known_objects'])
+        for s in plan.steps:
+            targets = {s.params.get('target'), s.success.target if s.success.type == 'detected' else None}
+            for t in targets - {None}:
+                if t in self.L['known_objects'] and t not in allowed:
+                    self._reject(rep, 'off_mission_target', f'{t!r} is not something the operator asked for; '
+                                 f'do not substitute a different object - refuse instead', s.id)
 
     def _fill_detected_targets(self, rep, plan: MissionPlan):
         """`detected` with an empty target: use the target the plan goes after next, else tool_ok."""

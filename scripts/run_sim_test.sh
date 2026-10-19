@@ -12,6 +12,7 @@
 #   -r RTF         real-time factor (default: 1.0)
 #   -d SOURCE      detection source: ground_truth | camera (default: config/sim.yaml)
 #   -c             render the camera and save frames (implied by -d camera)
+#   -S             also render a third-person spectator camera and save its frames (media)
 #   -n             no rosbag
 #   -o DIR         output dir (default: runs/<timestamp>_<slug>)
 #   -s STACK       sim stack: full | minimal (default: full)
@@ -22,7 +23,7 @@
 set -u
 WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARENA=default; TIMEOUT=300; PROVIDER=""; BATTERY=100; RTF=1.0; DET=""
-CAMERA=false; BAG=true; OUT=""; STACK=full; CMD=""; BLIND=""
+CAMERA=false; BAG=true; OUT=""; STACK=full; CMD=""; BLIND=""; SPECTATOR=false
 while [ $# -gt 0 ]; do
   case "$1" in
     -a) ARENA="$2"; shift 2;;
@@ -32,6 +33,7 @@ while [ $# -gt 0 ]; do
     -r) RTF="$2"; shift 2;;
     -d) DET="$2"; shift 2;;
     -c) CAMERA=true; shift;;
+    -S) SPECTATOR=true; shift;;
     -n) BAG=false; shift;;
     -o) OUT="$2"; shift 2;;
     -s) STACK="$2"; shift 2;;
@@ -58,6 +60,7 @@ SIM_PID=""; BAG_PID=""; FRAMES_PID=""
 finish() {
   local code=$1
   [ -n "$FRAMES_PID" ] && kill -INT "$FRAMES_PID" 2>/dev/null
+  [ -n "${SPEC_PID:-}" ] && kill -INT "$SPEC_PID" 2>/dev/null
   if [ -n "$BAG_PID" ]; then kill -INT "$BAG_PID" 2>/dev/null; wait "$BAG_PID" 2>/dev/null; fi
   if [ -n "$SIM_PID" ]; then
     kill -INT "$SIM_PID" 2>/dev/null
@@ -83,6 +86,7 @@ LARGS=(arena:="$ARENA" camera:="$CAMERA" rtf:="$RTF" battery_start:="$BATTERY" s
        report_file:="$OUT/referee.json")
 [ -n "$DET" ] && LARGS+=(detection_source:="$DET")
 [ -n "$BLIND" ] && LARGS+=(blind_classes:="$BLIND")
+$SPECTATOR && LARGS+=(spectator:=true)
 setsid timeout $((TIMEOUT + 90)) ros2 launch duburi_sim sim.launch.py "${LARGS[@]}" > "$OUT/launch.log" 2>&1 &
 SIM_PID=$!
 
@@ -96,6 +100,13 @@ if $BAG; then
     /duburi/controller/setpoint /duburi/controller/mode /duburi/thrusters/total_abs /duburi_sim/events \
     /duburi/mission_status > "$OUT/bag.log" 2>&1 &
   BAG_PID=$!
+fi
+SPEC_PID=""
+if $SPECTATOR; then
+  timeout $((TIMEOUT + 30)) ros2 run duburi_sim save_camera_frame --ros-args -r __node:=duburi_spectator_saver \
+    -p topic:=/duburi/spectator/image -p out_dir:="$OUT/frames_spectator" -p count:=200 -p every_n:=2 \
+    -p timeout_s:="$TIMEOUT" > "$OUT/frames_spectator.log" 2>&1 &
+  SPEC_PID=$!
 fi
 if $CAMERA; then
   timeout $((TIMEOUT + 30)) ros2 run duburi_sim save_camera_frame --ros-args -p out_dir:="$OUT/frames" \
@@ -115,5 +126,6 @@ else
   code=$?
 fi
 log "mission command exit=$code"
+sleep 3     # let the referee observe the final state before teardown
 
 finish "$code"

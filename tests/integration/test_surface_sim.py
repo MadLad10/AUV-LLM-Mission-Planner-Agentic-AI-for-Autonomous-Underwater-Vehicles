@@ -30,3 +30,23 @@ def test_surface_from_under_the_gate_crossbar(sim_launcher, tmp_path):
         backend.shutdown()
     time.sleep(1.5)
     assert read_referee(tmp_path)['surfaced_at_end']
+
+
+def test_depth_hold_at_the_limit_does_not_overshoot(sim_launcher, tmp_path):
+    """Found by the v4 sim eval (I2 reached 4.27 m with a 4.0 m limit): anti-windup + vertical speed limit."""
+    from duburi_mission_planner.config import load_config
+    from duburi_mission_planner.tools.registry import ToolRegistry
+    from duburi_mission_planner.tools.ros_backend import RosBackend
+    sim_launcher(timeout_s=240)
+    cfg = load_config()
+    backend = RosBackend(cfg)
+    assert backend.wait_ready(30)
+    tools = ToolRegistry(backend, cfg)
+    try:
+        obs = tools.call('hold_depth', {'depth': cfg['limits']['max_depth_m'], 'duration_s': 8}, timeout_s=120)
+        assert obs.ok and obs.data['mean_error_m'] < 0.1, obs.brief()
+        assert tools.call('surface', timeout_s=90).ok
+    finally:
+        backend.shutdown()
+    time.sleep(1.5)
+    assert read_referee(tmp_path)['max_depth_m'] <= cfg['limits']['max_depth_m'] + 0.1

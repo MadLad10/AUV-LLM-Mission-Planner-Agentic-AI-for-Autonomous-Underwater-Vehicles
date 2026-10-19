@@ -17,6 +17,7 @@ from duburi_sim.world_gen import THRUSTERS, generate_world
 def _setup(context):
     arena_name = LaunchConfiguration('arena').perform(context)
     camera = LaunchConfiguration('camera').perform(context).lower() == 'true'
+    spectator = LaunchConfiguration('spectator').perform(context).lower() == 'true'
     rtf = float(LaunchConfiguration('rtf').perform(context))
     stack = LaunchConfiguration('stack').perform(context)
     det_src = LaunchConfiguration('detection_source').perform(context)
@@ -29,12 +30,12 @@ def _setup(context):
     out_dir = os.path.join(os.environ.get('ROS_HOME', os.path.expanduser('~/.ros')), 'duburi_sim')
     os.makedirs(out_dir, exist_ok=True)
     world_file = os.path.join(out_dir, f'{os.path.basename(arena_name).replace(".yaml", "")}'
-                                       f'{"_cam" if camera else ""}.sdf')
+                                       f'{"_cam" if camera else ""}{"_spec" if spectator else ""}.sdf')
     with open(world_file, 'w') as f:
-        f.write(generate_world(arena, camera=camera, rtf=rtf))
+        f.write(generate_world(arena, camera=camera, rtf=rtf, spectator=spectator))
 
     gz_cmd = ['ign', 'gazebo', '-s', '-r', '-v', verbose]
-    if camera:
+    if camera or spectator:
         gz_cmd.append('--headless-rendering')
     gz_cmd.append(world_file)
     gz = ExecuteProcess(cmd=gz_cmd, output='screen', name='gz_server')
@@ -51,6 +52,8 @@ def _setup(context):
         remaps.append((gz_topic, f'/duburi/thrusters/{n}'))
     if camera:
         bridge_args.append('/duburi/camera/image@sensor_msgs/msg/Image[ignition.msgs.Image')
+    if spectator:
+        bridge_args.append('/duburi/spectator/image@sensor_msgs/msg/Image[ignition.msgs.Image')
     bridge = Node(package='ros_gz_bridge', executable='parameter_bridge', name='duburi_bridge',
                   arguments=bridge_args, remappings=remaps, output='screen',
                   parameters=[{'use_sim_time': True}])
@@ -85,6 +88,8 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('arena', default_value='default', description='arena name or yaml path'),
         DeclareLaunchArgument('camera', default_value='false', description='render the front camera'),
+        DeclareLaunchArgument('spectator', default_value='false',
+                              description='third-person camera for media (/duburi/spectator/image)'),
         DeclareLaunchArgument('rtf', default_value='1.0', description='real-time factor (0 = max)'),
         DeclareLaunchArgument('stack', default_value='full', description='minimal | full'),
         DeclareLaunchArgument('detection_source', default_value='',

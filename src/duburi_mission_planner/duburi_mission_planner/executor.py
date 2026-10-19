@@ -184,10 +184,16 @@ class Executor:
         t0 = self.tools.backend.now()
         w0 = time.time()
         surfaced = False
+        since = None
         while self.tools.backend.now() - t0 < timeout and time.time() - w0 < 3 * timeout:
             pose = self.tools.backend.pose()
-            if pose is not None and pose.depth < 0.3:
-                surfaced = True
-                break
+            if pose is not None and pose.depth < 0.3:      # must STAY up (it can still be rising/bobbing)
+                since = since if since is not None else (self.tools.backend.now(), time.time())
+                held = max(self.tools.backend.now() - since[0], time.time() - since[1])   # sim clock may be static
+                if held >= 2.0:
+                    surfaced = True
+                    break
+            else:
+                since = None
             time.sleep(0.2)
         return {'reason': reason, 'abort_call': obs.model_dump(), 'surfaced': surfaced}
