@@ -26,7 +26,8 @@ class NavigateToParams(_Params):
     forward_m: Optional[float] = Field(None, description='relative move: metres ahead of the vehicle (negative = back)')
     left_m: Optional[float] = Field(None, description='relative move: metres to the vehicle\'s left (negative = right)')
     depth: Optional[float] = Field(None, description='metres below the surface; default = object depth / current depth')
-    pass_through: bool = Field(False, description='for target=gate: drive through the opening')
+    pass_through: Optional[bool] = Field(None, description='for target=gate: drive through the opening '
+                                         '(default true for the gate unless standoff_m > 0)')
     standoff_m: float = Field(0.0, description='stop this far before the target (0 = touch it)')
     speed: Optional[float] = Field(None, description='m/s, optional')
 
@@ -37,6 +38,14 @@ class NavigateToParams(_Params):
         if self.forward_m is not None or self.left_m is not None:
             return 'relative'
         return 'point'
+
+    @property
+    def passes_gate(self) -> bool:
+        """Stopping inside a gate is never useful: target=gate means 'go through' unless a standoff
+        asks to stop in front of it."""
+        if self.target != 'gate':
+            return False
+        return self.pass_through if self.pass_through is not None else self.standoff_m <= 0
 
     @model_validator(mode='after')
     def _target_or_point(self):

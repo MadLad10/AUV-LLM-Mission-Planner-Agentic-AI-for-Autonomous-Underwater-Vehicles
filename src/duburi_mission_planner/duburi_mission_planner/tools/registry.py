@@ -136,7 +136,7 @@ class ToolRegistry:
         ux, uy = dx / dist, dy / dist
         heading = math.atan2(uy, ux)
 
-        if p.pass_through:
+        if p.passes_gate:
             a = self.tcfg.get('gate_approach_m', 1.5)
             o = self._go(est.x - a * ux, est.y - a * uy, depth, heading, 0.4, p.speed, remaining())
             if not o.ok:
@@ -165,7 +165,9 @@ class ToolRegistry:
         depth = p.depth
         if depth is None:
             pose = self.backend.pose()
-            depth = max(0.5, pose.depth) if pose else 1.0
+            # objects sit at ~1.5-2 m: searching from the surface sees almost nothing
+            default = self.tcfg.get('default_search_depth_m', 1.5)
+            depth = pose.depth if (pose and pose.depth >= 1.0) else default
         bad = point_violation(self.limits, None, None, depth)
         if bad:
             return False, {}, bad, 'unsafe_target'
@@ -183,7 +185,20 @@ class ToolRegistry:
         return self._from_outcome(self.backend.hold_depth(p.depth, dur, 0.3, timeout_s), {'depth': p.depth})
 
     def _surface(self, p, timeout_s):
-        return self._from_outcome(self.backend.surface(timeout_s))
+        cleared = self._clear_gate(timeout_s / 3)
+        o = self.backend.surface(timeout_s)
+        return self._from_outcome(o, {'cleared_gate_first': cleared} if cleared else None)
+
+    def _clear_gate(self, timeout_s) -> bool:
+        """If the vehicle is inside the remembered gate frame, drive out along its heading first
+        (ascending straight up would hit the crossbar)."""
+        pose = self.backend.pose()
+        gate = self.world.lookup('gate', self.backend.now()) if pose else None
+        if gate is None or math.hypot(pose.x - gate.x, pose.y - gate.y) > self.tcfg.get('gate_clearance_m', 1.0):
+            return False
+        a = self.tcfg.get('gate_approach_m', 1.5)
+        x, y = pose.x + a * math.cos(pose.yaw), pose.y + a * math.sin(pose.yaw)
+        return self._go(x, y, pose.depth, pose.yaw, 0.5, None, max(10.0, timeout_s)).ok
 
     def _abort(self, p, timeout_s):
         self.backend.cancel_all()

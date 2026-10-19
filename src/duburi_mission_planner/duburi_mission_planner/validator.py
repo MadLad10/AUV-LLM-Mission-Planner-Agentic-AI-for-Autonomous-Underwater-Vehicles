@@ -23,7 +23,9 @@ log = logging.getLogger('duburi.validator')
 MOTION_TOOLS = {'navigate_to', 'search_pattern', 'hold_depth'}
 DEFAULT_TIMEOUT_S = 60.0
 # shortest timeout the validator will scale a step down to (sim seconds)
-MIN_STEP_TIMEOUT_S = {'navigate_to': 60.0, 'search_pattern': 60.0, 'surface': 40.0}
+# shortest useful timeout per tool (sim seconds): shorter ones are raised, and over-budget plans are never
+# scaled below these. A 60 s spiral covers nothing; the look-around spiral needs ~170 s to find an off-axis buoy.
+MIN_STEP_TIMEOUT_S = {'navigate_to': 60.0, 'search_pattern': 180.0, 'surface': 40.0}
 
 
 @dataclass
@@ -93,6 +95,7 @@ class SafetyValidator:
                 for i, s in enumerate(plan.steps, 1):
                     s.id = i
 
+        self._fill_detected_targets(rep, plan)
         seen_abort = False
         for s in plan.steps:
             if seen_abort:
@@ -140,6 +143,11 @@ class SafetyValidator:
         if s.timeout_s <= 0:
             if self._repair(rep, 'step_timeout', f'timeout {s.timeout_s} -> {DEFAULT_TIMEOUT_S}', s.id):
                 s.timeout_s = DEFAULT_TIMEOUT_S
+        elif s.timeout_s < MIN_STEP_TIMEOUT_S.get(s.tool, 0.0):
+            need = MIN_STEP_TIMEOUT_S[s.tool]
+            if self._repair(rep, 'step_timeout', f'timeout {s.timeout_s:.0f}s too short for {s.tool}; '
+                                                 f'raised to {need:.0f}s', s.id):
+                s.timeout_s = need
         elif s.timeout_s > L['max_step_timeout_s']:
             if self._repair(rep, 'step_timeout', f'timeout {s.timeout_s:.0f}s clamped to '
                                                  f'{L["max_step_timeout_s"]:.0f}s', s.id):
@@ -183,6 +191,20 @@ class SafetyValidator:
         if speed is not None and speed > L['max_speed_mps']:
             if self._repair(rep, 'speed_limit', f'speed {speed} clamped to {L["max_speed_mps"]}', s.id):
                 s.params['speed'] = float(L['max_speed_mps'])
+
+    def _fill_detected_targets(self, rep, plan: MissionPlan):
+        """`detected` with an empty target: use the target the plan goes after next, else tool_ok."""
+        for i, s in enumerate(plan.steps):
+            if s.success.type != 'detected' or (s.success.target or '').strip():
+                continue
+            nxt = next((t.params.get('target') for t in plan.steps[i:] if t.params.get('target')), None)
+            msg = f'detected condition had no target; using {nxt!r}' if nxt else \
+                'detected condition had no target; using tool_ok'
+            if self._repair(rep, 'success_condition', msg, s.id):
+                if nxt:
+                    s.success.target = nxt
+                else:
+                    s.success = SuccessCondition(type='tool_ok')
 
     def _min_timeout(self, s: Step) -> float:
         if s.tool == 'hold_depth':

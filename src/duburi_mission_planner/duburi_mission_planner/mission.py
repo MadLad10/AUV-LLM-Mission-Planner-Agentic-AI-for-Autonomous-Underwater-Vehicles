@@ -112,7 +112,8 @@ class MissionRunner:
 
         deadline = time.time() + wall_timeout_s if wall_timeout_s else None
         wd = Watchdog(self.tools, self.cfg.get('executor', {}).get('watchdog_period_s', 1.0), deadline)
-        wd.mission_t0 = sim_t0
+        # the mission-time budget starts when the vehicle starts executing (planning happens before
+        # deployment, like a real run); replanning during the mission does count against it
         wd.start()
         executor = Executor(self.tools, self.validator, self.cfg, on_event=self._event_cb(trace, stats))
         done: list[dict] = []          # briefs of successful steps across all plans

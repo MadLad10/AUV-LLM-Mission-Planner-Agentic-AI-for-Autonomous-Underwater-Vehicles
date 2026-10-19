@@ -16,7 +16,7 @@ EXAMPLE_PLAN = {
             {'id': 2, 'tool': 'navigate_to', 'params': {'target': 'gate', 'pass_through': True},
              'success': {'type': 'tool_ok'}, 'timeout_s': 120, 'on_failure': 'replan'},
             {'id': 3, 'tool': 'search_pattern', 'params': {'target': 'green_buoy', 'pattern': 'yaw_sweep'},
-             'success': {'type': 'detected', 'target': 'green_buoy'}, 'timeout_s': 120, 'on_failure': 'replan'},
+             'success': {'type': 'detected', 'target': 'green_buoy'}, 'timeout_s': 180, 'on_failure': 'replan'},
             {'id': 4, 'tool': 'navigate_to', 'params': {'target': 'green_buoy', 'standoff_m': 0},
              'success': {'type': 'tool_ok'}, 'timeout_s': 120, 'on_failure': 'replan'},
             {'id': 5, 'tool': 'surface', 'params': {}, 'success': {'type': 'surfaced'}, 'timeout_s': 60,
@@ -50,7 +50,10 @@ WORLD
 - Objects that can exist: {objects}. Nothing else exists in the pool.
 - Object positions are NOT known in advance. Reach objects with navigate_to "target"; never invent
   coordinates for objects. The gate is usually visible from the start; buoys may need search_pattern.
-- Objects sit at about 1.5-2 m depth.
+- Objects sit at about 1.5-2 m depth. The camera sees about 8 m (the gate about 14 m).
+- Course layout: the gate is about 8 m ahead of the start; the buoys are beyond it, 12-20 m ahead.
+  A buoy is usually NOT visible from the start: pass the gate (or move forward with forward_m)
+  first, then search_pattern for it.
 
 LIMITS (plans that break these are rejected)
 - depth {limits['min_depth_m']}..{limits['max_depth_m']} m; x {g['x_min']}..{g['x_max']}; y {g['y_min']}..{g['y_max']}.
@@ -76,7 +79,7 @@ GUIDELINES
 - Touch a buoy: navigate_to {{"target": "<colour>_buoy", "standoff_m": 0}}; search_pattern for it first if it may not be in view.
 - Move relative to the vehicle: navigate_to {{"forward_m": 3, "left_m": 0, "depth": 1.0}}.
 - Finish with surface unless the operator says otherwise.
-- Typical timeouts: navigate_to 120, search_pattern 150, hold_depth duration+30, surface 60.
+- Typical timeouts: navigate_to 120, search_pattern 180-240, hold_depth duration+30, surface 60.
 
 EXAMPLE
 Request: "{EXAMPLE_REQUEST}"

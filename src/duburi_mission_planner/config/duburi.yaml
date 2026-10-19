@@ -49,6 +49,8 @@ tools:
   memory_s: 120.0          # how long a detection stays usable for object targets
   min_confidence: 0.4
   gate_approach_m: 1.5     # pass_through: waypoint before/after the gate centre
+  gate_clearance_m: 1.0    # surface: if this close to the gate centre, drive out first
+  default_search_depth_m: 1.5   # search started from near the surface goes to this depth
   touch_approach_m: 1.5    # touch: pause this far out to refine the estimate
   default_tolerance_m: 0.35
   wall_timeout_factor: 3.0 # wall-clock safety net = factor * sim timeout + 15 s

@@ -39,6 +39,8 @@ class VehicleServer(Node):
         self.max_speed = self.declare_parameter('max_speed', 0.6).value
         self.max_yaw_rate = self.declare_parameter('max_yaw_rate', 0.6).value
         self.settle_s = self.declare_parameter('settle_s', 1.0).value
+        self.stall_s = self.declare_parameter('surface_stall_s', 4.0).value       # no ascent progress -> stalled
+        self.clear_m = self.declare_parameter('surface_clear_m', 1.5).value       # horizontal move to get clear
         self.hard_max_depth = self.declare_parameter('hard_max_depth_m', 4.6).value
         arena = load_arena(self.declare_parameter('arena_file', 'default').value)
         p = arena['pool']
@@ -341,28 +343,61 @@ class VehicleServer(Node):
             res.message = str(e)
             return self._finish(gh, res, False)
 
-    def exec_surface(self, gh):
-        token = self._claim()
-        res = Surface.Result()
+    def _surface_loop(self, token, gh=None, timeout_s=None):
+        """Ascend; if the ascent stalls (something overhead, e.g. the gate crossbar), move clear
+        horizontally and try again. Returns True when on the surface. Raises Preempted."""
         x, y, _, yaw = self.pose
         self.set_sp(x, y, 0.0, yaw)
         self.set_mode('surface')
         fb = Surface.Feedback()
+        t0 = self.now()
         since = None
-        try:
-            while True:
+        best, best_t = -self.pose[2], t0
+        nudges = 0
+        while timeout_s is None or self.now() - t0 < timeout_s:
+            if gh is not None:
                 self._check(token, gh)
-                d = -self.pose[2]
-                fb.current_depth = d
+                fb.current_depth = -self.pose[2]
                 gh.publish_feedback(fb)
-                if d < 0.2:
-                    since = since or self.now()
-                    if self.now() - since > 1.0:
-                        res.success, res.message = True, 'surfaced'
-                        return self._finish(gh, res, True)
-                else:
-                    since = None
+            elif token != self.active:
+                raise Preempted('preempted by a newer goal')
+            d = -self.pose[2]
+            if d < 0.2:
+                since = since or self.now()
+                if self.now() - since > 1.0:
+                    return True
                 time.sleep(TICK)
+                continue
+            since = None
+            if d < best - 0.05:
+                best, best_t = d, self.now()
+            elif self.now() - best_t > self.stall_s and nudges < 4:
+                nudges += 1
+                sign = 1.0 if nudges % 2 else -1.0          # forward first, then backward
+                px, py, pz, pyaw = self.pose
+                tx = px + sign * self.clear_m * math.cos(pyaw)
+                ty = py + sign * self.clear_m * math.sin(pyaw)
+                self.get_logger().warn(f'ascent stalled at {d:.2f} m: moving {sign * self.clear_m:+.1f} m to clear')
+                self.set_sp(tx, ty, pz, pyaw)
+                self.set_mode('hold')
+                end = self.now() + 15.0
+                while self.now() < end and math.dist(self.pose[:2], (tx, ty)) > 0.3:
+                    if gh is not None:
+                        self._check(token, gh)
+                    time.sleep(TICK)
+                self.set_sp(self.pose[0], self.pose[1], 0.0, pyaw)
+                self.set_mode('surface')
+                best, best_t = -self.pose[2], self.now()
+            time.sleep(TICK)
+        return False
+
+    def exec_surface(self, gh):
+        token = self._claim()
+        res = Surface.Result()
+        try:
+            ok = self._surface_loop(token, gh)
+            res.success, res.message = ok, 'surfaced' if ok else 'surface timed out'
+            return self._finish(gh, res, ok)
         except Preempted as e:
             res.message = str(e)
             return self._finish(gh, res, False)
@@ -374,6 +409,14 @@ class VehicleServer(Node):
             self.set_sp(x, y, 0.0, yaw)
         self.set_mode('surface')
         self.get_logger().warn('EMERGENCY SURFACE requested')
+        token = self.active
+
+        def run():
+            try:
+                self._surface_loop(token, None, timeout_s=180.0)
+            except Preempted:
+                pass
+        threading.Thread(target=run, daemon=True).start()
         resp.success, resp.message = True, 'surfacing'
         return resp
 

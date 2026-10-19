@@ -8,6 +8,7 @@ from this report, not from what the agent claims.
 """
 import json
 import math
+from collections import deque
 
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
@@ -18,6 +19,8 @@ from duburi_sim.arena import load_arena, world_to_body
 from duburi_sim.ros_util import spin_node
 
 TOUCH_MARGIN = 0.35   # hull half-length + slack
+SURFACE_WINDOW_S = 2.0
+SURFACED_DEPTH_M = 0.3   # same threshold as the executor's `surfaced` condition
 
 
 class Referee(Node):
@@ -34,6 +37,7 @@ class Referee(Node):
         self.path_len = 0.0
         self.last_pos = None
         self.final = None
+        self.recent = deque()          # (t, depth) over the last SURFACE_WINDOW_S: a floating hull bobs
         self.create_subscription(Odometry, '/duburi/odom', self.on_odom, 20)
         self.pub = self.create_publisher(String, '/duburi_sim/events', 10)
         self.create_service(Trigger, '/duburi_sim/referee_report', self.on_report)
@@ -56,13 +60,19 @@ class Referee(Node):
             'buoys_touched': sorted(self.touched),
             'touch_order': [e['buoy'] for e in self.events if e['event'] == 'buoy_touched'],
             'surfaced': any(e['event'] == 'surfaced' for e in self.events),
-            'surfaced_at_end': self.final is not None and self.final['depth'] < 0.25,
+            'surfaced_at_end': self._surfaced_now(),
             'max_depth_m': round(self.max_depth, 2),
             'boundary_contacts': sum(e['event'] == 'boundary_contact' for e in self.events),
             'path_length_m': round(self.path_len, 1),
             'final': self.final,
             'sim_time_s': self.t(),
         }
+
+    def _surfaced_now(self) -> bool:
+        """On the surface = mean depth over the last window below the threshold (robust to bobbing)."""
+        if not self.recent:
+            return False
+        return sum(d for _, d in self.recent) / len(self.recent) < SURFACED_DEPTH_M
 
     def write(self):
         if self.report_file:
@@ -81,6 +91,10 @@ class Referee(Node):
             self.path_len += math.dist(self.last_pos, (x, y, z))
         self.last_pos = (x, y, z)
         self.final = {'x': round(x, 2), 'y': round(y, 2), 'depth': round(depth, 2)}
+        now = self.t()
+        self.recent.append((now, depth))
+        while self.recent and now - self.recent[0][0] > SURFACE_WINDOW_S:
+            self.recent.popleft()
         self.max_depth = max(self.max_depth, depth)
         if depth > 0.5:
             self.was_deep = True
