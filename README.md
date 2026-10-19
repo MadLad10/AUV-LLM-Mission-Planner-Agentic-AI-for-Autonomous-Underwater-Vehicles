@@ -1,6 +1,6 @@
 # AUV LLM Mission Planner
 
-Plain-language missions for the **BRACU autonomous underwater vehicle (AUV)**.
+Plain-language missions for the **Autonomous underwater vehicle (AUV)**.
 You type a mission:
 
 ```
