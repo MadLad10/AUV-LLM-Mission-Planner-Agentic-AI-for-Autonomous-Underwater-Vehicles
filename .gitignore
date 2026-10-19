@@ -15,3 +15,4 @@ rosbag*/
 __pycache__/
 *.pyc
 .pytest_cache/
+CLAUDE.md
