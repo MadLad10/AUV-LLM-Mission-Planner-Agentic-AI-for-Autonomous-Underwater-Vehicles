@@ -4,8 +4,8 @@
 #   scripts/start_ollama.sh stop     stop the container (frees RAM)
 #   scripts/start_ollama.sh status
 set -u
-NAME=duburi-ollama            # dedicated to this project (the plain `ollama` container is shared with other projects)
-PORT="${DUBURI_OLLAMA_PORT:-11436}"
+NAME=auv-ollama            # dedicated to this project (the plain `ollama` container is shared with other projects)
+PORT="${AUV_OLLAMA_PORT:-11436}"
 IMAGE=ollama/ollama:0.12.6
 MODEL="${OLLAMA_MODEL:-qwen2.5:3b-instruct}"
 MEM="${OLLAMA_MEM:-4g}"

@@ -10,9 +10,9 @@ pytestmark = pytest.mark.integration
 
 
 def test_surface_from_under_the_gate_crossbar(sim_launcher, tmp_path):
-    from duburi_mission_planner.config import load_config
-    from duburi_mission_planner.tools.registry import ToolRegistry
-    from duburi_mission_planner.tools.ros_backend import RosBackend
+    from auv_mission_planner.config import load_config
+    from auv_mission_planner.tools.registry import ToolRegistry
+    from auv_mission_planner.tools.ros_backend import RosBackend
     sim_launcher(timeout_s=300)
     cfg = load_config()
     backend = RosBackend(cfg)
@@ -34,9 +34,9 @@ def test_surface_from_under_the_gate_crossbar(sim_launcher, tmp_path):
 
 def test_depth_hold_at_the_limit_does_not_overshoot(sim_launcher, tmp_path):
     """Found by the v4 sim eval (I2 reached 4.27 m with a 4.0 m limit): anti-windup + vertical speed limit."""
-    from duburi_mission_planner.config import load_config
-    from duburi_mission_planner.tools.registry import ToolRegistry
-    from duburi_mission_planner.tools.ros_backend import RosBackend
+    from auv_mission_planner.config import load_config
+    from auv_mission_planner.tools.registry import ToolRegistry
+    from auv_mission_planner.tools.ros_backend import RosBackend
     sim_launcher(timeout_s=240)
     cfg = load_config()
     backend = RosBackend(cfg)

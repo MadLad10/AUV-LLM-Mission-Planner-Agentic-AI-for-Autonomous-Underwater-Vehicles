@@ -25,11 +25,11 @@ SURF = {'tool': 'surface', 'timeout_s': 60, 'success': {'type': 'surfaced'}, 'on
 
 
 def test_hidden_buoy_replan_succeeds(sim_launcher, tmp_path):
-    from duburi_mission_planner.config import load_config, load_llm_config
-    from duburi_mission_planner.llm.providers import MockProvider
-    from duburi_mission_planner.mission import MissionRunner
-    from duburi_mission_planner.tools.registry import ToolRegistry
-    from duburi_mission_planner.tools.ros_backend import RosBackend
+    from auv_mission_planner.config import load_config, load_llm_config
+    from auv_mission_planner.llm.providers import MockProvider
+    from auv_mission_planner.mission import MissionRunner
+    from auv_mission_planner.tools.registry import ToolRegistry
+    from auv_mission_planner.tools.ros_backend import RosBackend
     sim_launcher(timeout_s=400, arena='buoy_hidden')
     cfg = load_config()
     backend = RosBackend(cfg)

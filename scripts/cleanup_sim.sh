@@ -3,7 +3,7 @@
 # Does NOT touch the Ollama container. Never matches its own ancestors (the calling shell's command
 # line may contain the same words).
 set -u
-REGEX='(^|/)ign gazebo|ign-gazebo|gz sim|/ruby .*ign|parameter_bridge|/install/duburi_[a-z_]+/lib/|ros2 launch duburi_|ros2 bag record|_ros2_daemon'
+REGEX='(^|/)ign gazebo|ign-gazebo|gz sim|/ruby .*ign|parameter_bridge|/install/auv_[a-z_]+/lib/|ros2 launch auv_|ros2 bag record|_ros2_daemon'
 
 ancestors() {
   local p=$$

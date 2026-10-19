@@ -24,11 +24,11 @@ GOOD = {'status': 'plan', 'reason': '', 'plan': {
 
 
 def _runner(tmp_path, responses):
-    from duburi_mission_planner.config import load_config, load_llm_config
-    from duburi_mission_planner.llm.providers import MockProvider
-    from duburi_mission_planner.mission import MissionRunner
-    from duburi_mission_planner.tools.registry import ToolRegistry
-    from duburi_mission_planner.tools.ros_backend import RosBackend
+    from auv_mission_planner.config import load_config, load_llm_config
+    from auv_mission_planner.llm.providers import MockProvider
+    from auv_mission_planner.mission import MissionRunner
+    from auv_mission_planner.tools.registry import ToolRegistry
+    from auv_mission_planner.tools.ros_backend import RosBackend
     cfg = load_config()
     backend = RosBackend(cfg)
     assert backend.wait_ready(30)
@@ -48,7 +48,7 @@ def test_full_mission_succeeds_and_referee_agrees(sim_launcher, tmp_path):
     ref = read_referee(tmp_path)
     assert res['outcome'] == 'succeeded', res['reason']
     assert ref['gate_passed'] and ref['buoys_touched'] == ['red_buoy'] and ref['surfaced_at_end'], ref
-    from duburi_mission_planner.tracing import validate_trace
+    from auv_mission_planner.tracing import validate_trace
     trace = json.load(open(res['trace']))
     validate_trace(trace)
     assert len(trace['tool_calls']) == 4 and trace['outcome']['outcome'] == 'succeeded'
@@ -70,7 +70,7 @@ def test_low_battery_aborts_and_surfaces(sim_launcher, tmp_path):
 
 
 def test_mission_service(sim_launcher, tmp_path):
-    from duburi_mission_planner.config import load_llm_config
+    from auv_mission_planner.config import load_llm_config
     sim_launcher(timeout_s=300)
     (tmp_path / 'responses.json').write_text(json.dumps([GOOD, GOOD]))   # dry plan + execution plan
     llm = load_llm_config()
@@ -78,15 +78,15 @@ def test_mission_service(sim_launcher, tmp_path):
     llm['providers']['scripted'] = {'type': 'mock', 'model': 'scripted',
                                     'responses_file': str(tmp_path / 'responses.json')}
     (tmp_path / 'llm.yaml').write_text(yaml.safe_dump(llm))
-    server = subprocess.Popen(['timeout', '250', 'ros2', 'run', 'duburi_mission_planner', 'mission_server',
+    server = subprocess.Popen(['timeout', '250', 'ros2', 'run', 'auv_mission_planner', 'mission_server',
                                '--ros-args', '-p', f'llm_config:={tmp_path / "llm.yaml"}',
                                '-p', f'trace_dir:={tmp_path}'],
                               stdout=open(tmp_path / 'server.log', 'w'), stderr=subprocess.STDOUT,
                               start_new_session=True)
     try:
         call = subprocess.run(
-            ['timeout', '60', 'ros2', 'service', 'call', '/duburi/submit_mission',
-             'duburi_mission_interfaces/srv/SubmitMission',
+            ['timeout', '60', 'ros2', 'service', 'call', '/auv/submit_mission',
+             'auv_mission_interfaces/srv/SubmitMission',
              "{prompt: 'pass through the gate, touch the red buoy, then surface', provider: '', dry_run: false}"],
             capture_output=True, text=True)
         assert 'accepted=True' in call.stdout, call.stdout + call.stderr + (tmp_path / 'server.log').read_text()

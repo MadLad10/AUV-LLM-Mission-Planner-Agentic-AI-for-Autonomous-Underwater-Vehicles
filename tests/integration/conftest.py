@@ -14,7 +14,7 @@ CLEANUP = os.path.join(WS, 'scripts', 'cleanup_sim.sh')
 
 
 def _ros_ready():
-    return 'AMENT_PREFIX_PATH' in os.environ and 'duburi_sim' in os.environ.get('AMENT_PREFIX_PATH', '')
+    return 'AMENT_PREFIX_PATH' in os.environ and 'auv_sim' in os.environ.get('AMENT_PREFIX_PATH', '')
 
 
 @pytest.fixture
@@ -25,13 +25,13 @@ def sim_launcher(tmp_path):
     procs = []
     subprocess.run([CLEANUP], capture_output=True, timeout=30)
 
-    def start(timeout_s=180, wait_for='/duburi/odom', **args):
+    def start(timeout_s=180, wait_for='/auv/odom', **args):
         args.setdefault('report_file', str(tmp_path / 'referee.json'))
-        args.setdefault('rtf', os.environ.get('DUBURI_TEST_RTF', '3.0'))
-        before = subprocess.run(['bash', '-c', 'ps -eo pid,etimes,args | grep -E "duburi_|ign gazebo|parameter_bridge"'
+        args.setdefault('rtf', os.environ.get('AUV_TEST_RTF', '3.0'))
+        before = subprocess.run(['bash', '-c', 'ps -eo pid,etimes,args | grep -E "auv_|ign gazebo|parameter_bridge"'
                                  ' | grep -v grep'], capture_output=True, text=True).stdout
         (tmp_path / 'procs_before_launch.txt').write_text(before)
-        cmd = ['timeout', str(timeout_s), 'ros2', 'launch', 'duburi_sim', 'sim.launch.py']
+        cmd = ['timeout', str(timeout_s), 'ros2', 'launch', 'auv_sim', 'sim.launch.py']
         cmd += [f'{k}:={v}' for k, v in args.items()]
         log = open(tmp_path / 'launch.log', 'w')
         p = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)

@@ -24,13 +24,13 @@ def test_floats_idle_and_holds_setpoint(sim_launcher):
     rclpy.init()
     node = rclpy.create_node('m1_probe')
     odom = {}
-    node.create_subscription(Odometry, '/duburi/odom', lambda m: odom.update(p=m.pose.pose.position), 10)
+    node.create_subscription(Odometry, '/auv/odom', lambda m: odom.update(p=m.pose.pose.position), 10)
     try:
         _collect(node, 6.0, odom)           # idle: positive buoyancy -> rises to the surface
         assert odom['p'].z > -0.2, f'should float near surface, z={odom["p"].z}'
 
-        sp = node.create_publisher(PoseStamped, '/duburi/controller/setpoint', 10)
-        mode = node.create_publisher(String, '/duburi/controller/mode', 10)
+        sp = node.create_publisher(PoseStamped, '/auv/controller/setpoint', 10)
+        mode = node.create_publisher(String, '/auv/controller/mode', 10)
         msg = PoseStamped()
         msg.pose.position.x, msg.pose.position.z = 2.0, -1.2
         msg.pose.orientation.w = 1.0

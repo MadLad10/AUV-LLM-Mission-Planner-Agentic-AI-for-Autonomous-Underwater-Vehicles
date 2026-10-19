@@ -1,6 +1,6 @@
-# Duburi LLM Mission Planner
+# AUV LLM Mission Planner
 
-Plain-language missions for **BRACU Duburi**, an autonomous underwater vehicle (AUV).
+Plain-language missions for the **BRACU autonomous underwater vehicle (AUV)**.
 You type a mission:
 
 ```
@@ -90,7 +90,7 @@ Three design principles hold throughout:
 
 | Layer | Technology |
 |---|---|
-| Robotics middleware | ROS 2 Humble (rclpy); custom messages, services and actions in `duburi_mission_interfaces` |
+| Robotics middleware | ROS 2 Humble (rclpy); custom messages, services and actions in `auv_mission_interfaces` |
 | Simulator | Ignition Gazebo Fortress 6.18, headless server only, with the Buoyancy, Hydrodynamics, Thruster, OdometryPublisher, IMU and Sensors systems; `ros_gz` bridge 0.244; ogre2 rendering through EGL for the cameras |
 | Local LLM | **qwen2.5:3b-instruct** (3.1B parameters, Q4_K_M) served by Ollama 0.12.6 in Docker, using JSON-schema **constrained decoding** (`format`), temperature 0.1, 4k context |
 | API LLM (configured) | Groq free tier, `openai/gpt-oss-120b`, through an OpenAI-compatible client; Gemini and OpenRouter work the same way. Not yet evaluated because no key was set. |
@@ -102,9 +102,9 @@ Three design principles hold throughout:
 
 ### The vehicle (simulated stand-in)
 
-No Gazebo model of Duburi existed, so the evaluation uses a stand-in AUV with plausible dimensions.
+No Gazebo model of AUV existed, so the evaluation uses a stand-in AUV with plausible dimensions.
 The planner talks to it through the same high-level interface it would use on the real vehicle (see
-[Running on the real Duburi stack](#running-on-the-real-duburi-stack)).
+[Running on the real AUV stack](#running-on-the-real-auv-stack)).
 
 | Property | Value |
 |---|---|
@@ -178,7 +178,7 @@ that must hold (`eval/missions.yaml`).
 
 **Limitations** (worth knowing when reading the numbers):
 - One run per mission (n = 1), so the rates are indicative, not statistically tight.
-- The vehicle and the course are stand-ins, not Duburi's real dynamics or a measured pool.
+- The vehicle and the course are stand-ins, not AUV's real dynamics or a measured pool.
 - The default detector projects ground truth with added noise; the HSV camera detector works but was
   not used for the scored runs.
 - Latencies were measured on a shared CPU-only machine whose load varied between runs.
@@ -228,7 +228,7 @@ Other observations:
 ```mermaid
 flowchart LR
   U[Operator] -->|"mission &quot;...&quot;" CLI| MR[MissionRunner]
-  N[Other ROS 2 nodes] -->|/duburi/submit_mission| MR
+  N[Other ROS 2 nodes] -->|/auv/submit_mission| MR
   MR --> PL[Planner]
   PL <-->|messages / JSON plan| LLM[(LLM provider<br/>Ollama · Groq · Gemini · mock)]
   PL --> VAL{Safety validator<br/>reject · repair}
@@ -237,7 +237,7 @@ flowchart LR
   EX -->|step failed: observation| PL
   EX --> TL[Tools layer<br/>8 typed tools]
   TL -->|"ROS 2 actions / read-only topics<br/>(names from config)"| VB
-  subgraph VB [Vehicle backend - backend: sim or duburi]
+  subgraph VB [Vehicle backend - backend: sim or real]
     VS[vehicle_server<br/>NavigateTo · Search · HoldDepth · Surface] --> LLC[low-level PID controller]
     LLC --> THR[6 thrusters]
   end
@@ -279,11 +279,11 @@ sequenceDiagram
 | Planner | `planner.py`, `prompts.py`, `plan.py` | Builds the system prompt from the tool schemas and the config limits. Parses the plan JSON (`{status: plan\|refuse, plan: {steps[{tool, params, success, timeout_s, on_failure}], abort_conditions}}`). Feeds format errors back to the LLM. Has plan, repair and replan entry points. |
 | Safety validator | `validator.py` | Deterministic, with no LLM involved. **Rejects**: disallowed tools, depth or geofence violations, unknown objects, steps after `abort`, total time over budget. **Repairs**: appends `surface`, inserts or raises the battery abort, clamps timeouts, hold duration, search radius and speed. Also a runtime precheck before every step. |
 | Executor | `executor.py`, `mission.py` | Runs steps as ROS 2 actions and evaluates success conditions (`tool_ok`, `reached`, `detected`, `depth_within`, `surfaced`, `battery_above`). A watchdog enforces abort conditions. Replans up to `max_replans`, then performs a safe abort (cancel and surface). |
-| Interfaces | `cli.py`, `mission_server_node.py` | `mission "..."` CLI, and the `/duburi/submit_mission` service with status on `/duburi/mission_status`. |
+| Interfaces | `cli.py`, `mission_server_node.py` | `mission "..."` CLI, and the `/auv/submit_mission` service with status on `/auv/mission_status`. |
 | Tracing | `tracing.py`, `scripts/show_trace.py` | One schema-validated JSON per mission: the prompt, every LLM call (tokens, latency, cost), plans, validator reports, tool calls and observations, replans, the outcome and totals. |
 | LLM providers | `llm/` | Ollama (local, constrained JSON decoding), any OpenAI-compatible API (Groq, Gemini, OpenRouter, OpenAI), and a mock. Selected in config. Keys come from `.env`. |
-| Simulation | `src/duburi_sim` | Ignition Gazebo Fortress pool with a gate and red, green and yellow buoys. The 6-thruster AUV has graded buoyancy and hydrodynamics. Also: PID controller, vehicle action server, battery model, detector (ground truth or camera HSV), and a ground-truth referee. |
-| Real vehicle | `backends/duburi_adapter.py` | Serves the same interface on top of Duburi's `control` action, `/dvl/position` and `camera_topic` (see [Real vehicle](#running-on-the-real-duburi-stack)). |
+| Simulation | `src/auv_sim` | Ignition Gazebo Fortress pool with a gate and red, green and yellow buoys. The 6-thruster AUV has graded buoyancy and hydrodynamics. Also: PID controller, vehicle action server, battery model, detector (ground truth or camera HSV), and a ground-truth referee. |
+| Real vehicle | `backends/auv_adapter.py` | Serves the same interface on top of AUV's `control` action, `/dvl/position` and `camera_topic` (see [Real vehicle](#running-on-the-real-auv-stack)). |
 
 ### Safety boundary
 
@@ -296,15 +296,15 @@ low-level controller in the backend also keeps its own hard depth limit.
 ## Repository layout
 
 ```
-duburi_llm_ws/
+AUV_LLM_planner/
 ├── PLAN.md  README.md  .env.example
 ├── scripts/      run_sim_test.sh  cleanup_sim.sh  start_ollama.sh  mission  show_trace.py  wait_ready.py  env.sh
 ├── eval/         missions.yaml  run_eval.py  results/
 ├── tests/        integration/ (headless Gazebo)  test_eval_scoring.py
 └── src/
-    ├── duburi_mission_interfaces/   msgs, SubmitMission.srv, NavigateTo/Search/HoldDepth/Surface actions
-    ├── duburi_sim/                  world generator, launch, controller, vehicle server, battery, detector, referee
-    └── duburi_mission_planner/      config/{duburi,llm}.yaml, tools/, llm/, planner, validator, executor, cli, ...
+    ├── auv_mission_interfaces/   msgs, SubmitMission.srv, NavigateTo/Search/HoldDepth/Surface actions
+    ├── auv_sim/                  world generator, launch, controller, vehicle server, battery, detector, referee
+    └── auv_mission_planner/      config/{auv,llm}.yaml, tools/, llm/, planner, validator, executor, cli, ...
 ```
 
 ## Setup
@@ -317,7 +317,7 @@ sudo apt install ros-humble-desktop ros-humble-ros-gz python3-colcon-common-exte
 pip install --user "pydantic>=2"            # PyYAML, numpy and OpenCV come with ROS
 
 # build
-cd ~/yaad_ws/duburi_llm_ws
+cd AUV_LLM_planner
 source /opt/ros/humble/setup.bash
 colcon build --symlink-install
 source scripts/env.sh                        # ROS + overlay, ROS_DOMAIN_ID=42, localhost only
@@ -341,14 +341,14 @@ scripts/run_sim_test.sh -d camera -c "pass through the gate then surface"   # ca
 # plan only (no sim needed)
 scripts/mission --dry-run "touch the green buoy then surface"
 
-# against a running sim (ros2 launch duburi_sim sim.launch.py in another shell)
+# against a running sim (ros2 launch auv_sim sim.launch.py in another shell)
 scripts/mission --provider groq "go through the gate, touch all three buoys, then surface"
 
 # ROS 2 service
-ros2 run duburi_mission_planner mission_server
-ros2 service call /duburi/submit_mission duburi_mission_interfaces/srv/SubmitMission \
+ros2 run auv_mission_planner mission_server
+ros2 service call /auv/submit_mission auv_mission_interfaces/srv/SubmitMission \
   "{prompt: 'pass through the gate then surface', provider: '', dry_run: false}"
-ros2 topic echo /duburi/mission_status
+ros2 topic echo /auv/mission_status
 
 # inspect a trace
 scripts/show_trace.py --latest            # or: scripts/show_trace.py runs/<run>/trace_<id>.json --messages
@@ -361,20 +361,20 @@ run directory gets `launch.log`, `mission.log`, `trace_*.json`, `referee.json`, 
 
 ## Configuration
 
-* `src/duburi_mission_planner/config/duburi.yaml`: `backend: sim | duburi`, every topic, action and
+* `src/auv_mission_planner/config/auv.yaml`: `backend: sim | real`, every topic, action and
   service name per backend, the safety `limits` (depth, geofence, speed, battery floors, timeouts,
   allowed tools, known objects), tool settings and `executor.max_replans`.
-* `src/duburi_mission_planner/config/llm.yaml`: providers (model, endpoint, JSON mode, pricing) and
+* `src/auv_mission_planner/config/llm.yaml`: providers (model, endpoint, JSON mode, pricing) and
   the planner retry budgets. Switch with `--provider` or `default_provider`.
-* `src/duburi_sim/config/sim.yaml`: controller gains, battery model, detector
+* `src/auv_sim/config/sim.yaml`: controller gains, battery model, detector
   (`detection_source: ground_truth | camera`, noise, FOV). Arenas are in `config/arenas/*.yaml`.
 
-## Running on the real Duburi stack
+## Running on the real AUV stack
 
-Set `backend: duburi` and run `ros2 run duburi_mission_planner duburi_adapter` next to the Duburi
-nodes. The adapter serves the same actions under `/duburi_adapter/*`:
+Set `backend: real` and run `ros2 run auv_mission_planner auv_adapter` next to the AUV
+nodes. The adapter serves the same actions under `/auv_adapter/*`:
 
-| Planner interface | Duburi stack |
+| Planner interface | AUV stack |
 |---|---|
 | NavigateTo | `control` action `forward/backward/left/right` (relative metres, DVL frame) + `/simulator/control` `set_depth` |
 | heading | `control` `yaw_left/yaw_right` (absolute degrees) |

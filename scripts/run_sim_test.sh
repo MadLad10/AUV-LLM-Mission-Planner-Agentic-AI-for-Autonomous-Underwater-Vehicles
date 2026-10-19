@@ -87,7 +87,7 @@ LARGS=(arena:="$ARENA" camera:="$CAMERA" rtf:="$RTF" battery_start:="$BATTERY" s
 [ -n "$DET" ] && LARGS+=(detection_source:="$DET")
 [ -n "$BLIND" ] && LARGS+=(blind_classes:="$BLIND")
 $SPECTATOR && LARGS+=(spectator:=true)
-setsid timeout $((TIMEOUT + 90)) ros2 launch duburi_sim sim.launch.py "${LARGS[@]}" > "$OUT/launch.log" 2>&1 &
+setsid timeout $((TIMEOUT + 90)) ros2 launch auv_sim sim.launch.py "${LARGS[@]}" > "$OUT/launch.log" 2>&1 &
 SIM_PID=$!
 
 # wait for odometry (+ vehicle actions for the full stack); no ros2 CLI daemon involved
@@ -96,20 +96,20 @@ python3 "$WS/scripts/wait_ready.py" "${WAIT_ARGS[@]}" || { log "sim did not come
 log "sim ready"
 
 if $BAG; then
-  timeout $((TIMEOUT + 60)) ros2 bag record -o "$OUT/bag" /duburi/odom /duburi/battery /duburi/detections \
-    /duburi/controller/setpoint /duburi/controller/mode /duburi/thrusters/total_abs /duburi_sim/events \
-    /duburi/mission_status > "$OUT/bag.log" 2>&1 &
+  timeout $((TIMEOUT + 60)) ros2 bag record -o "$OUT/bag" /auv/odom /auv/battery /auv/detections \
+    /auv/controller/setpoint /auv/controller/mode /auv/thrusters/total_abs /auv_sim/events \
+    /auv/mission_status > "$OUT/bag.log" 2>&1 &
   BAG_PID=$!
 fi
 SPEC_PID=""
 if $SPECTATOR; then
-  timeout $((TIMEOUT + 30)) ros2 run duburi_sim save_camera_frame --ros-args -r __node:=duburi_spectator_saver \
-    -p topic:=/duburi/spectator/image -p out_dir:="$OUT/frames_spectator" -p count:=200 -p every_n:=2 \
+  timeout $((TIMEOUT + 30)) ros2 run auv_sim save_camera_frame --ros-args -r __node:=auv_spectator_saver \
+    -p topic:=/auv/spectator/image -p out_dir:="$OUT/frames_spectator" -p count:=200 -p every_n:=2 \
     -p timeout_s:="$TIMEOUT" > "$OUT/frames_spectator.log" 2>&1 &
   SPEC_PID=$!
 fi
 if $CAMERA; then
-  timeout $((TIMEOUT + 30)) ros2 run duburi_sim save_camera_frame --ros-args -p out_dir:="$OUT/frames" \
+  timeout $((TIMEOUT + 30)) ros2 run auv_sim save_camera_frame --ros-args -p out_dir:="$OUT/frames" \
     -p count:=60 -p every_n:=10 -p timeout_s:="$TIMEOUT" > "$OUT/frames.log" 2>&1 &
   FRAMES_PID=$!
 fi
@@ -121,7 +121,7 @@ if [ -n "$CMD" ]; then
 else
   log "mission: $PROMPT"
   extra=(); [ -n "$PROVIDER" ] && extra=(--provider "$PROVIDER")
-  timeout "$TIMEOUT" ros2 run duburi_mission_planner mission "${extra[@]}" --trace-dir "$OUT" \
+  timeout "$TIMEOUT" ros2 run auv_mission_planner mission "${extra[@]}" --trace-dir "$OUT" \
     --timeout "$TIMEOUT" "$PROMPT" > "$OUT/mission.log" 2>&1
   code=$?
 fi

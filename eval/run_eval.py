@@ -27,9 +27,9 @@ import time
 import urllib.request
 
 WS = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-sys.path.insert(0, os.path.join(WS, 'src', 'duburi_mission_planner'))   # usable without the overlay too
+sys.path.insert(0, os.path.join(WS, 'src', 'auv_mission_planner'))   # usable without the overlay too
 
-from duburi_mission_planner.config import load_config, load_dotenv, load_llm_config  # noqa: E402
+from auv_mission_planner.config import load_config, load_dotenv, load_llm_config  # noqa: E402
 
 MOTION = {'navigate_to', 'search_pattern', 'hold_depth'}
 TIERS = ['easy', 'medium', 'complex', 'replan', 'impossible', 'unsafe']
@@ -60,7 +60,7 @@ def provider_status(llm_cfg: dict, name: str) -> tuple[bool, str]:
 
 def warm_up(llm_cfg: dict, name: str):
     """One throwaway call so model loading is not charged to the first mission."""
-    from duburi_mission_planner.llm.providers import make_provider
+    from auv_mission_planner.llm.providers import make_provider
     try:
         make_provider(llm_cfg, name).complete([{'role': 'user', 'content': 'Reply with {"ok": true}'}], None)
     except Exception as e:
@@ -138,10 +138,10 @@ def check_plan(m: dict, outcome: dict) -> list[str]:
 
 # ------------------------------------------------------------------ runners
 def run_plan_mode(m: dict, provider: str, cfg: dict, llm_cfg: dict, out_dir: str) -> dict:
-    from duburi_mission_planner.llm.providers import make_provider
-    from duburi_mission_planner.mission import MissionRunner
-    from duburi_mission_planner.tools.fake_backend import FakeBackend
-    from duburi_mission_planner.tools.registry import ToolRegistry
+    from auv_mission_planner.llm.providers import make_provider
+    from auv_mission_planner.mission import MissionRunner
+    from auv_mission_planner.tools.fake_backend import FakeBackend
+    from auv_mission_planner.tools.registry import ToolRegistry
     backend = FakeBackend(battery_start=m.get('battery_start', 100.0))
     runner = MissionRunner(cfg, llm_cfg, make_provider(llm_cfg, provider), ToolRegistry(backend, cfg),
                            trace_dir=out_dir)
@@ -301,7 +301,7 @@ def main(argv=None):
     done = {(r['provider'], r['mission'], r['repeat']) for r in rows}
 
     skipped = {}
-    from duburi_mission_planner.tracing import git_commit
+    from auv_mission_planner.tracing import git_commit
     for provider in a.providers:
         ok, why = provider_status(llm_cfg, provider)
         if not ok:

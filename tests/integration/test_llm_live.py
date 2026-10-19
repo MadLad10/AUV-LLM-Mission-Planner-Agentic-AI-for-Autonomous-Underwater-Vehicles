@@ -4,11 +4,11 @@ import urllib.request
 
 import pytest
 
-from duburi_mission_planner.config import load_config, load_dotenv, load_llm_config
-from duburi_mission_planner.llm.providers import make_provider
-from duburi_mission_planner.planner import Planner
-from duburi_mission_planner.tools.fake_backend import FakeBackend
-from duburi_mission_planner.tools.registry import ToolRegistry
+from auv_mission_planner.config import load_config, load_dotenv, load_llm_config
+from auv_mission_planner.llm.providers import make_provider
+from auv_mission_planner.planner import Planner
+from auv_mission_planner.tools.fake_backend import FakeBackend
+from auv_mission_planner.tools.registry import ToolRegistry
 
 pytestmark = pytest.mark.llm
 CTX = {'pose': {'x': 0, 'y': 0, 'depth': 0.1, 'yaw_deg': 0}, 'battery_percent': 95.0, 'remembered_objects': {}}

@@ -3,7 +3,7 @@ _WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 set +u
 source /opt/ros/humble/setup.bash
 [ -f "$_WS/install/setup.bash" ] && source "$_WS/install/setup.bash"
-export DUBURI_WS="$_WS"
+export AUV_WS="$_WS"
 export IGN_GAZEBO_RESOURCE_PATH="${IGN_GAZEBO_RESOURCE_PATH:-}"
 # keep sim traffic off the LAN / other ROS graphs on this machine
 export ROS_LOCALHOST_ONLY=1

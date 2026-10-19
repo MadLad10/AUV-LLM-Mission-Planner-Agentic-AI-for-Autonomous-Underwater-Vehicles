@@ -5,7 +5,7 @@
 
 Produces:
   <name>_topdown.png   pool, gate and buoys from the arena YAML, the vehicle's path from the rosbag
-                       (/duburi/odom), coloured by depth, with referee events marked
+                       (/auv/odom), coloured by depth, with referee events marked
   <name>_depth.png     depth vs time with the same events
   <name>_onboard.gif   front-camera frames (RUN_DIR/frames, recorded with run_sim_test.sh -c)
   <name>_spectator.gif third-person frames (RUN_DIR/frames_spectator, recorded with -S)
@@ -27,14 +27,14 @@ COLORS = {'red_buoy': '#e03131', 'green_buoy': '#2f9e44', 'yellow_buoy': '#f2c80
 
 
 def read_odom(bag_dir):
-    """(t, x, y, depth) from /duburi/odom in a ROS 2 sqlite bag."""
+    """(t, x, y, depth) from /auv/odom in a ROS 2 sqlite bag."""
     from rclpy.serialization import deserialize_message
     from nav_msgs.msg import Odometry
     dbs = glob.glob(os.path.join(bag_dir, '*.db3'))
     if not dbs:
         return []
     con = sqlite3.connect(dbs[0])
-    tid = con.execute("select id from topics where name='/duburi/odom'").fetchone()
+    tid = con.execute("select id from topics where name='/auv/odom'").fetchone()
     if tid is None:
         return []
     out = []
@@ -46,7 +46,7 @@ def read_odom(bag_dir):
 
 
 def arena_objects(name):
-    path = name if os.path.isfile(name) else os.path.join(WS, 'src', 'duburi_sim', 'config', 'arenas', f'{name}.yaml')
+    path = name if os.path.isfile(name) else os.path.join(WS, 'src', 'auv_sim', 'config', 'arenas', f'{name}.yaml')
     return yaml.safe_load(open(path))
 
 

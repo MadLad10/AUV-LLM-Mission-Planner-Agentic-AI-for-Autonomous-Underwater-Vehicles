@@ -10,9 +10,9 @@ pytestmark = pytest.mark.integration
 
 @pytest.fixture
 def tools(sim_launcher, request):
-    from duburi_mission_planner.config import load_config
-    from duburi_mission_planner.tools.registry import ToolRegistry
-    from duburi_mission_planner.tools.ros_backend import RosBackend
+    from auv_mission_planner.config import load_config
+    from auv_mission_planner.tools.registry import ToolRegistry
+    from auv_mission_planner.tools.ros_backend import RosBackend
     sim_launcher(timeout_s=300, **getattr(request, 'param', {}))
     cfg = load_config()
     backend = RosBackend(cfg)

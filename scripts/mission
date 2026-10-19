@@ -3,4 +3,4 @@
 # (needs a running sim for execution: scripts/run_sim_test.sh does launch + run + teardown in one go)
 set +u
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/env.sh"
-exec ros2 run duburi_mission_planner mission "$@"
+exec ros2 run auv_mission_planner mission "$@"

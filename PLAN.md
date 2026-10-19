@@ -1,4 +1,4 @@
-# PLAN — Duburi LLM Mission Planner
+# PLAN — AUV LLM Mission Planner
 
 ## 1. Environment (from discovery, 2026-10-18)
 
@@ -10,14 +10,14 @@
 | RAM | 15 GB total, ~1.5 GB free at idle | Local LLM ≤ 3–4B; never run eval with heavy apps open |
 | Python | 3.10, pydantic 2, pytest 6 | `.venv --system-site-packages` for anthropic-free deps (httpx, python-dotenv, tabulate) |
 | Ollama | not installed; official download redirects to github.com (HARD RULE 1) | Run official `ollama/ollama` image from **Docker Hub** (docker works without sudo); models come from registry.ollama.ai |
-| Existing Duburi stack | `~/yaad_ws/Duburi_ws` — source only, no world | Real interfaces recorded in §6; stand-in sim built here |
+| Existing AUV stack | `the team's existing AUV workspace` — source only, no world | Real interfaces recorded in §6; stand-in sim built here |
 
 ## 2. Architecture
 
 ```mermaid
 flowchart LR
   U[User / other node] -->|CLI `mission "..."`| CLI
-  U -->|/duburi/submit_mission srv| SRV
+  U -->|/auv/submit_mission srv| SRV
   CLI --> MGR[Mission manager]
   SRV --> MGR
   MGR --> PL[Planner]
@@ -28,7 +28,7 @@ flowchart LR
   EX -->|failure observation| PL
   EX --> TOOLS[Tools layer<br/>typed schemas]
   TOOLS -->|ROS2 actions / topics<br/>names from YAML| VB[Vehicle backend]
-  subgraph Backend [backend: sim  or  duburi]
+  subgraph Backend [backend: sim  or  auv]
     VB --> LLC[Low-level controller PID]
     LLC --> THR[Thrusters]
   end
@@ -51,7 +51,7 @@ the LLM) and returns an `Observation {ok, tool, data, error, sim_time, duration_
   detected, the step fails with `target_not_detected` and replanning kicks in.
 - `search_pattern(target, pattern=lawnmower|spiral|yaw_sweep, radius_m)` stops when the target is
   detected.
-- `config/duburi.yaml` holds every topic/action name, the backend choice, the limits and the
+- `config/auv.yaml` holds every topic/action name, the backend choice, the limits and the
   detection source.
 
 ### 2.2 Planner
@@ -87,8 +87,8 @@ cancel goals → `surface()`.
 
 ### 2.5 Interfaces
 - CLI: `mission "pass through the gate then surface" [--provider ollama|groq|mock] [--dry-run] [--timeout 300]`
-- ROS2 service `/duburi/submit_mission` (`SubmitMission.srv`: prompt, provider, dry_run →
-  accepted, mission_id, plan_json, message) plus status on `/duburi/mission_status`.
+- ROS2 service `/auv/submit_mission` (`SubmitMission.srv`: prompt, provider, dry_run →
+  accepted, mission_id, plan_json, message) plus status on `/auv/mission_status`.
 
 ### 2.6 Tracing
 One JSON file per mission in `traces/`. It records the prompt, provider/model, every LLM call
@@ -106,7 +106,7 @@ meaningful.
 - `MockProvider`: scripted responses, used for unit tests.
 Keys come from `.env` (`GROQ_API_KEY`, …); `.env.example` is committed and `.env` is gitignored.
 
-### 2.8 Stand-in simulation (`duburi_sim`)
+### 2.8 Stand-in simulation (`auv_sim`)
 - **World**: a 30 × 20 × 5 m pool, fluid density 1000, with a gate (2 posts + crossbar, ~1.5 m wide)
   at ~8 m and red/green/yellow buoys. Variants: `default`, `buoy_hidden` (red buoy behind the start,
   so the AUV must search → tests replanning) and `cluttered`.
@@ -115,7 +115,7 @@ Keys come from `.env` (`GROQ_API_KEY`, …); `.env.example` is committed and `.e
   surge), forward camera, IMU, ground-truth odometry.
 - **Nodes**: a low-level PID controller (setpoint → thruster commands; the only thing that touches
   thrusters) and a vehicle action server (`navigate_to`, `search`, `hold_depth`, `surface` actions,
-  mirroring the role of Duburi's `control` action). The battery simulator publishes
+  mirroring the role of AUV's `control` action). The battery simulator publishes
   `sensor_msgs/BatteryState` (drain ∝ thrust + time; the start % is configurable so battery aborts
   can be tested). The detector, with `detection_source: ground_truth | camera`, uses either
   ground-truth poses → camera-frame projection with FOV/range limits, noise and dropout, or an
@@ -127,21 +127,21 @@ Keys come from `.env` (`GROQ_API_KEY`, …); `.env.example` is committed and `.e
 ## 3. Folder structure
 
 ```
-duburi_llm_ws/
+AUV_LLM_planner/
 ├── PLAN.md  README.md  .gitignore  .env.example
 ├── scripts/  setup_venv.sh  start_ollama.sh  cleanup_sim.sh  run_sim_test.sh  mission
 ├── eval/     run_eval.py  missions.yaml  results/
 ├── traces/   (gitignored)
 └── src/
-    ├── duburi_mission_interfaces/   ament_cmake: SubmitMission.srv, NavigateTo/Search/HoldDepth/Surface.action, Detection(Array).msg
-    ├── duburi_sim/                  ament_python: worlds/, models/, launch/, controller, vehicle server, battery, detector
-    └── duburi_mission_planner/      ament_python
-        ├── config/duburi.yaml  config/llm.yaml
-        ├── duburi_mission_planner/
+    ├── auv_mission_interfaces/   ament_cmake: SubmitMission.srv, NavigateTo/Search/HoldDepth/Surface.action, Detection(Array).msg
+    ├── auv_sim/                  ament_python: worlds/, models/, launch/, controller, vehicle server, battery, detector
+    └── auv_mission_planner/      ament_python
+        ├── config/auv.yaml  config/llm.yaml
+        ├── auv_mission_planner/
         │   ├── schemas.py  validator.py  planner.py  executor.py  tracing.py  prompts.py
         │   ├── llm/ base.py ollama.py openai_compat.py mock.py
         │   ├── tools/ base.py registry.py ros_backend.py fake_backend.py
-        │   ├── backends/duburi_adapter.py      (maps tools → real Duburi `control` action)
+        │   ├── backends/auv_adapter.py      (maps tools → real AUV `control` action)
         │   ├── cli.py  mission_server_node.py
         └── test/ unit (validator, planner+mock LLM, tools+fake backend, safety boundary) + integration (headless sim)
 ```
@@ -174,7 +174,7 @@ Each mission has an expected outcome (`success | refuse | safe_abort`). Recorded
 match, replans, unsafe plans caught, LLM latency, tokens, cost. There are two modes: `--plan-only`
 (no sim, fast, measures planning reliability) and full sim.
 
-## 6. Real Duburi interfaces (read from ~/yaad_ws/Duburi_ws, for the `duburi` backend)
+## 6. Real AUV interfaces (read from the team's existing AUV workspace, for the `auv` backend)
 - Action `control` (`custom_interfaces/action/Control`: `string action, float32 value`). Commands:
   arm, disarm, mode_manual, mode_depth_hold, mode_stabilize, forward, backward, left, right,
   yaw_left, yaw_right.
