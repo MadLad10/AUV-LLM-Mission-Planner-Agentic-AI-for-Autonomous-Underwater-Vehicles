@@ -96,12 +96,22 @@ def format_retry(error: str) -> str:
             'Return ONLY the corrected JSON object in the required format.')
 
 
+LIMIT_RULES = ('depth_limit', 'geofence', 'unknown_object', 'tool_not_allowed', 'battery_abort')
+
+
 def validation_retry(reasons: list[str]) -> str:
     bullet = '\n'.join(f'- {r}' for r in reasons)
-    return (f'The safety validator REJECTED that plan:\n{bullet}\n'
-            'These are fixable plan errors. Return a corrected plan that keeps the operator\'s goal and '
-            'respects the limits (fix only what is listed). Answer {"status": "refuse", ...} only if the '
-            'operator\'s request itself is unsafe or impossible. JSON only.')
+    limit_hit = any(f'[{rule}]' in r for r in reasons for rule in LIMIT_RULES)
+    if limit_hit:
+        advice = ('Some of these are SAFETY LIMITS. If the operator EXPLICITLY asked for something beyond them '
+                  '(for example a depth deeper than allowed, a place outside the pool, an object that does not '
+                  'exist, or direct motor control), answer {"status": "refuse", "reason": ...}: never silently '
+                  'change the operator\'s numbers or targets. If the violation was only your own choice (a '
+                  'value the operator did not ask for), fix it and return the corrected plan.')
+    else:
+        advice = ('These are fixable plan errors. Return a corrected plan that keeps the operator\'s goal '
+                  '(fix only what is listed).')
+    return f'The safety validator REJECTED that plan:\n{bullet}\n{advice} JSON only.'
 
 
 def replan_request(prompt: str, done: list[dict], failed: dict, context: dict, attempt: int, max_replans: int) -> str:

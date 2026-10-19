@@ -223,3 +223,11 @@ def test_dotenv_loader(tmp_path, monkeypatch):
         monkeypatch.delenv(k)          # registers an undo, so nothing leaks into other tests
     got = load_dotenv(str(f))
     assert got == {'DUBURI_TEST_KEY_A': 'abc', 'DUBURI_TEST_KEY_B': '1'} and os.environ['DUBURI_TEST_KEY_A'] == 'abc'
+
+
+def test_validation_retry_wording_depends_on_rule():
+    from duburi_mission_planner.prompts import validation_retry
+    limit = validation_retry(['[depth_limit] step 1: depth 50.00 m exceeds the maximum 4.0 m'])
+    assert 'never silently' in limit and 'refuse' in limit
+    fixable = validation_retry(['[invalid_params] step 2: navigate_to: params: x: Field required'])
+    assert 'fixable' in fixable and 'never silently' not in fixable
